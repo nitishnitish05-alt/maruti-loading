@@ -129,6 +129,15 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 .sku-entry { display: grid; grid-template-columns: 1fr 80px 34px; gap: 6px; align-items: center; margin-bottom: 6px; }
 .sku-entry select, .sku-entry input { margin-bottom: 0; font-size: 13px; padding: 8px 8px; }
 .del-btn { width: 34px; height: 38px; background: var(--red-light); color: var(--red); border: 0.5px solid #F7C1C1; border-radius: var(--radius-md); cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+/* Autocomplete */
+.sku-ac-wrap { position: relative; }
+.sku-ac-input { width: 100%; border: 0.5px solid var(--border-md); border-radius: var(--radius-md); padding: 8px 8px; font-size: 13px; color: var(--text-primary); background: var(--bg-primary); font-family: inherit; box-sizing: border-box; }
+.sku-ac-input:focus { outline: none; border-color: var(--blue); }
+.sku-ac-list { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-primary); border: 0.5px solid var(--border-md); border-radius: var(--radius-md); z-index: 999; max-height: 180px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,0.12); margin-top: 2px; }
+.sku-ac-item { padding: 10px 12px; font-size: 13px; cursor: pointer; color: var(--text-primary); border-bottom: 0.5px solid var(--border); }
+.sku-ac-item:last-child { border-bottom: none; }
+.sku-ac-item:active, .sku-ac-item.highlighted { background: var(--blue-light); color: var(--blue-dark); }
+.sku-ac-empty { padding: 10px 12px; font-size: 12px; color: var(--text-secondary); }
 
 /* Summary */
 .summary-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); }
@@ -859,33 +868,102 @@ function renderLoading(id){
     return activeRowHTML(ri,row,skus,isEdit);
   }).join('');
 }
+function buildEntryHTML(e, ei, ri, skus){
+  var selSku = skus.find(function(sk){return sk.id==e.skuId;});
+  var displayVal = selSku ? selSku.name : '';
+  return '<div class="sku-entry" data-ei="'+ei+'">' +
+    '<div class="sku-ac-wrap">' +
+      '<input class="sku-ac-input" type="text" placeholder="Type SKU name..." ' +
+        'value="'+displayVal+'" ' +
+        'data-ri="'+ri+'" data-ei="'+ei+'" data-skuid="'+(e.skuId||'')+'" ' +
+        'oninput="skuSearch(this,'+ri+','+ei+')" ' +
+        'onfocus="skuSearch(this,'+ri+','+ei+')" ' +
+        'onblur="skuBlur(this,'+ri+','+ei+')" ' +
+        'autocomplete="off">' +
+      '<div class="sku-ac-list" id="sku-list-'+ri+'-'+ei+'" style="display:none;"></div>' +
+    '</div>' +
+    '<input type="number" min="0" value="'+(e.qty||'')+'" placeholder="Qty" ' +
+      'onchange="onQty('+ri+','+ei+',this.value)">' +
+    '<button class="del-btn" onclick="delEntry('+ri+','+ei+')">×</button>' +
+  '</div>';
+}
+
+function skuSearch(inp, ri, ei){
+  var q = inp.value.trim().toLowerCase();
+  var skus = loadSKUs();
+  var list = document.getElementById('sku-list-'+ri+'-'+ei);
+  if(!list) return;
+  var matches = q.length===0 ? skus : skus.filter(function(sk){return sk.name.toLowerCase().indexOf(q)>=0;});
+  if(!matches.length){
+    list.innerHTML='<div class="sku-ac-empty">No SKU found</div>';
+    list.style.display='block'; return;
+  }
+  list.innerHTML = matches.map(function(sk){
+    return '<div class="sku-ac-item" onmousedown="skuPick('+ri+','+ei+','+sk.id+',\''+sk.name.replace(/'/g,"\\'")+'\')">' +
+      sk.name + '<span style="font-size:11px;color:var(--text-secondary);margin-left:6px;">'+sk.unit+'</span></div>';
+  }).join('');
+  list.style.display='block';
+}
+
+function skuPick(ri, ei, skuId, skuName){
+  // Update live data
+  liveRows[ri].entries[ei].skuId = skuId;
+  // Update input display
+  var inp = document.querySelector('.sku-ac-input[data-ri="'+ri+'"][data-ei="'+ei+'"]');
+  if(inp){ inp.value=skuName; inp.dataset.skuid=skuId; }
+  // Hide dropdown
+  var list = document.getElementById('sku-list-'+ri+'-'+ei);
+  if(list) list.style.display='none';
+}
+
+function skuBlur(inp, ri, ei){
+  // Delay hide so click on item registers first
+  setTimeout(function(){
+    var list = document.getElementById('sku-list-'+ri+'-'+ei);
+    if(list) list.style.display='none';
+    // If typed text doesn't match any SKU, clear the field
+    var skus=loadSKUs();
+    var val=inp.value.trim().toLowerCase();
+    var match=skus.find(function(sk){return sk.name.toLowerCase()===val;});
+    if(!match && val.length>0){
+      // Try partial — if only one match, auto-select it
+      var partial=skus.filter(function(sk){return sk.name.toLowerCase().indexOf(val)>=0;});
+      if(partial.length===1){
+        liveRows[ri].entries[ei].skuId=partial[0].id;
+        inp.value=partial[0].name;
+      } else {
+        // Clear if ambiguous
+        liveRows[ri].entries[ei].skuId='';
+        inp.value='';
+      }
+    }
+  }, 200);
+}
+
 function activeRowHTML(ri,row,skus,edit){
-  const entries=row.entries.map((e,ei)=>`
-    <div class="sku-entry">
-      <select onchange="onSku(${ri},${ei},this.value)">
-        <option value="">-- Select SKU --</option>
-        ${skus.map(sk=>`<option value="${sk.id}" ${sk.id==e.skuId?'selected':''}>${sk.name}</option>`).join('')}
-      </select>
-      <input type="number" min="0" value="${e.qty||''}" placeholder="Qty" onchange="onQty(${ri},${ei},this.value)">
-      <button class="del-btn" onclick="delEntry(${ri},${ei})">×</button>
-    </div>`).join('');
-  if(edit)return `<div class="row-card state-editing">
-    <div class="row-header"><span class="row-badge rb-editing">✏️ Editing Row ${row.row}</span><button class="btn btn-sm btn-secondary no-print" onclick="cancelEditRow(${ri})">Cancel</button></div>
-    <div style="font-size:12px;color:var(--amber);margin-bottom:8px;">Edit then tap "Save row ${row.row}"</div>
-    <div id="entries-${ri}">${entries}</div>
-    <button class="btn btn-sm btn-secondary no-print" style="margin:6px 0 8px;" onclick="addEntry(${ri})">+ Add SKU</button>
-    <button class="btn btn-primary no-print" style="margin-bottom:0;" onclick="saveEditRow(${ri})">Save row ${row.row}</button>
-  </div>`;
-  return `<div class="row-card state-active">
-    <div class="row-header"><span class="row-badge rb-active">Row ${row.row}</span><button class="btn btn-sm btn-secondary no-print" onclick="addEntry(${ri})">+ Add SKU</button></div>
-    <div id="entries-${ri}">${entries}</div>
-    ${!row.entries.length?'<div style="font-size:12px;color:var(--text-secondary);padding:4px 0;">Tap "+ Add SKU" to begin</div>':''}
-    ${row.entries.length?`<button class="btn btn-primary no-print save-row-btn" style="margin-top:8px;margin-bottom:0;" onclick="confirmRow(${ri})">Save row ${row.row} & continue →</button>`:''}
-  </div>`;
+  const entries=row.entries.map(function(e,ei){ return buildEntryHTML(e,ei,ri,skus); }).join('');
+  if(edit)return '<div class="row-card state-editing">' +
+    '<div class="row-header"><span class="row-badge rb-editing">✏️ Editing Row '+row.row+'</span><button class="btn btn-sm btn-secondary no-print" onclick="cancelEditRow('+ri+')">Cancel</button></div>' +
+    '<div style="font-size:12px;color:var(--amber);margin-bottom:8px;">Edit then tap "Save row '+row.row+'"</div>' +
+    '<div id="entries-'+ri+'">'+entries+'</div>' +
+    '<button class="btn btn-sm btn-secondary no-print" style="margin:6px 0 8px;" onclick="addEntry('+ri+')">+ Add SKU</button>' +
+    '<button class="btn btn-primary no-print" style="margin-bottom:0;" onclick="saveEditRow('+ri+')">Save row '+row.row+'</button>' +
+  '</div>';
+  return '<div class="row-card state-active">' +
+    '<div class="row-header"><span class="row-badge rb-active">Row '+row.row+'</span><button class="btn btn-sm btn-secondary no-print" onclick="addEntry('+ri+')">+ Add SKU</button></div>' +
+    '<div id="entries-'+ri+'">'+entries+'</div>' +
+    (!row.entries.length?'<div style="font-size:12px;color:var(--text-secondary);padding:4px 0;">Tap "+ Add SKU" to begin</div>':'') +
+    (row.entries.length?'<button class="btn btn-primary no-print save-row-btn" style="margin-top:8px;margin-bottom:0;" onclick="confirmRow('+ri+')">Save row '+row.row+' & continue →</button>':'') +
+  '</div>';
 }
 function flushDOM(ri){
   const c=document.getElementById('entries-'+ri);if(!c)return;
-  liveRows[ri].entries=Array.from(c.querySelectorAll('.sku-entry')).map(r=>({skuId:parseInt(r.querySelector('select').value)||r.querySelector('select').value||'',qty:parseFloat(r.querySelector('input').value)||0}));
+  liveRows[ri].entries=Array.from(c.querySelectorAll('.sku-entry')).map(function(row){
+    var acInp=row.querySelector('.sku-ac-input');
+    var qInp=row.querySelector('input[type=number]');
+    var skuId=acInp?acInp.dataset.skuid:'';
+    return {skuId:parseInt(skuId)||skuId||'', qty:parseFloat(qInp?qInp.value:0)||0};
+  });
 }
 function onSku(ri,ei,v){liveRows[ri].entries[ei].skuId=parseInt(v)||v||'';}
 function onQty(ri,ei,v){liveRows[ri].entries[ei].qty=parseFloat(v)||0;}
@@ -893,15 +971,7 @@ function addEntry(ri){flushDOM(ri);liveRows[ri].entries.push({skuId:'',qty:0});r
 function delEntry(ri,ei){flushDOM(ri);liveRows[ri].entries.splice(ei,1);refreshEntries(ri);}
 function refreshEntries(ri){
   const skus=loadSKUs(),row=liveRows[ri],isEdit=(ri===editRowIdx);
-  const html=row.entries.map((e,ei)=>`
-    <div class="sku-entry">
-      <select onchange="onSku(${ri},${ei},this.value)">
-        <option value="">-- Select SKU --</option>
-        ${skus.map(sk=>`<option value="${sk.id}" ${sk.id==e.skuId?'selected':''}>${sk.name}</option>`).join('')}
-      </select>
-      <input type="number" min="0" value="${e.qty||''}" placeholder="Qty" onchange="onQty(${ri},${ei},this.value)">
-      <button class="del-btn" onclick="delEntry(${ri},${ei})">×</button>
-    </div>`).join('');
+  const html=row.entries.map(function(e,ei){ return buildEntryHTML(e,ei,ri,skus); }).join('');
   const c=document.getElementById('entries-'+ri);if(c)c.innerHTML=html;
   if(!isEdit){
     const card=c?c.closest('.row-card'):null;
@@ -909,7 +979,7 @@ function refreshEntries(ri){
       const ob=card.querySelector('.save-row-btn');if(ob)ob.remove();
       const oh=card.querySelector('.empty-hint');if(oh)oh.remove();
       if(!row.entries.length){const h=document.createElement('div');h.className='empty-hint';h.style.cssText='font-size:12px;color:var(--text-secondary);padding:4px 0;';h.textContent='Tap "+ Add SKU" to begin';card.appendChild(h);}
-      else{const b=document.createElement('button');b.className='btn btn-primary no-print save-row-btn';b.style.cssText='margin-top:8px;margin-bottom:0;';b.innerHTML=`Save row ${row.row} & continue →`;b.onclick=()=>confirmRow(ri);card.appendChild(b);}
+      else{const b=document.createElement('button');b.className='btn btn-primary no-print save-row-btn';b.style.cssText='margin-top:8px;margin-bottom:0;';b.innerHTML='Save row '+row.row+' & continue →';b.onclick=function(){confirmRow(ri);};card.appendChild(b);}
     }
   }
 }
