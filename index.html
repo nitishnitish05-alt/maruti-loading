@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#185FA5">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="TruckLoad">
+<title>Truck Loading Manager</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f0;
+  --bg-tertiary: #eeede8;
+  --text-primary: #1a1a18;
+  --text-secondary: #6b6b66;
+  --border: rgba(0,0,0,0.15);
+  --border-md: rgba(0,0,0,0.25);
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --blue: #185FA5;
+  --blue-light: #E6F1FB;
+  --blue-dark: #0C447C;
+  --green: #3B6D11;
+  --green-light: #EAF3DE;
+  --amber: #854F0B;
+  --amber-light: #FAEEDA;
+  --red: #A32D2D;
+  --red-light: #FCEBEB;
+  --purple-light: #EEEDFE;
+  --purple-dark: #3C3489;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; background: var(--bg-tertiary); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text-primary); }
+.app { max-width: 480px; margin: 0 auto; padding: 12px; min-height: 100vh; }
+.screen { display: none; }
+.screen.active { display: block; }
+.card { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 12px; }
+.page-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+.field-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+input, select { width: 100%; border: 0.5px solid var(--border-md); border-radius: var(--radius-md); padding: 10px 12px; font-size: 15px; color: var(--text-primary); background: var(--bg-primary); margin-bottom: 12px; appearance: none; -webkit-appearance: none; font-family: inherit; }
+input:focus, select:focus { outline: none; border-color: var(--blue); }
+.btn { width: 100%; padding: 12px; border-radius: var(--radius-md); font-size: 15px; font-weight: 600; cursor: pointer; border: none; margin-bottom: 8px; font-family: inherit; transition: opacity .15s; }
+.btn:active { opacity: .8; }
+.btn-primary { background: var(--blue); color: #fff; }
+.btn-secondary { background: var(--bg-secondary); color: var(--text-primary); border: 0.5px solid var(--border-md); }
+.btn-danger { background: var(--red-light); color: var(--red); border: 0.5px solid #F7C1C1; }
+.btn-success { background: var(--green-light); color: var(--green); border: 0.5px solid #C0DD97; }
+.btn-warn { background: var(--amber-light); color: var(--amber); border: 0.5px solid #FAC775; }
+.btn-sm { width: auto; padding: 7px 13px; font-size: 13px; margin-bottom: 0; }
+.inline-row { display: flex; gap: 8px; }
+.inline-row > * { flex: 1; }
+.nav-back { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; cursor: pointer; color: var(--text-secondary); font-size: 14px; padding: 4px 0; }
+.empty-state { text-align: center; padding: 32px 16px; color: var(--text-secondary); font-size: 14px; }
+
+/* PIN */
+.pin-display { display: flex; gap: 12px; justify-content: center; margin: 14px 0; }
+.pin-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-md); background: transparent; transition: background .12s; }
+.pin-dot.filled { background: var(--blue); border-color: var(--blue); }
+.pin-pad { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 10px; min-height: 200px; }
+.pin-key { padding: 17px; font-size: 22px; font-weight: 500; border: 0.5px solid var(--border); border-radius: var(--radius-md); background: var(--bg-primary); cursor: pointer; text-align: center; color: var(--text-primary); user-select: none; min-height: 56px; display: flex; align-items: center; justify-content: center; }
+.pin-key:active { background: var(--bg-secondary); }
+.pin-key.del-key { font-size: 17px; color: var(--text-secondary); }
+.pin-error { color: var(--red); font-size: 13px; text-align: center; margin-bottom: 6px; min-height: 20px; }
+
+/* Top bar */
+.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; padding-top: 4px; }
+.top-bar-right { display: flex; gap: 6px; align-items: center; }
+.user-chip { display: flex; align-items: center; gap: 5px; background: var(--bg-secondary); border: 0.5px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 12px; color: var(--text-secondary); }
+.role-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.role-dot.admin { background: var(--blue); }
+.role-dot.user { background: var(--green); }
+
+/* Tabs */
+.tab-bar { display: flex; gap: 4px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 4px; margin-bottom: 16px; }
+.tab { flex: 1; padding: 8px; text-align: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: var(--text-secondary); border: none; background: transparent; font-family: inherit; }
+.tab.active { background: var(--bg-primary); color: var(--text-primary); font-weight: 600; border: 0.5px solid var(--border); }
+.admin-tabs { display: flex; gap: 4px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 4px; margin-bottom: 16px; }
+.admin-tab { flex: 1; padding: 7px; text-align: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: var(--text-secondary); border: none; background: transparent; font-family: inherit; }
+.admin-tab.active { background: var(--bg-primary); color: var(--text-primary); font-weight: 600; border: 0.5px solid var(--border); }
+
+/* Badges */
+.badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; display: inline-block; }
+.badge-small { background: var(--blue-light); color: var(--blue-dark); margin-left: 5px; }
+.badge-large { background: var(--purple-light); color: var(--purple-dark); margin-left: 5px; }
+.badge-done { background: var(--green-light); color: var(--green); }
+.badge-active-s { background: var(--amber-light); color: var(--amber); }
+.badge-admin-r { background: var(--blue-light); color: var(--blue-dark); }
+.badge-user-r { background: var(--green-light); color: var(--green); }
+
+/* Session cards */
+.session-card { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+.session-info { flex: 1; cursor: pointer; }
+.session-truck { font-size: 15px; font-weight: 600; }
+.session-meta { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+.session-dest { font-size: 12px; color: var(--blue); margin-top: 2px; }
+.session-time { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.session-actions { display: flex; gap: 6px; align-items: center; flex-shrink: 0; margin-left: 8px; }
+.icon-btn { width: 32px; height: 32px; border-radius: var(--radius-md); border: 0.5px solid var(--border-md); background: var(--bg-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.icon-btn.del { background: var(--red-light); border-color: #F7C1C1; }
+
+/* Truck type */
+.truck-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.truck-btn { border: 0.5px solid var(--border-md); border-radius: var(--radius-md); padding: 13px 8px; cursor: pointer; background: var(--bg-primary); text-align: center; }
+.truck-btn.selected { border: 2px solid var(--blue); background: var(--blue-light); }
+.truck-btn .tt-icon { font-size: 26px; margin-bottom: 4px; }
+.truck-btn .tt-label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.truck-btn .tt-rows { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.truck-btn.selected .tt-label { color: var(--blue-dark); }
+.rows-hint { font-size: 12px; color: var(--text-secondary); margin-top: -8px; margin-bottom: 12px; }
+
+/* Row cards */
+.row-card { border-radius: var(--radius-md); padding: 12px; margin-bottom: 8px; }
+.row-card.state-done { background: var(--bg-secondary); border: 0.5px solid var(--border); }
+.row-card.state-active { background: var(--bg-primary); border: 2px solid var(--blue); }
+.row-card.state-editing { background: var(--bg-primary); border: 2px solid #BA7517; }
+.row-card.state-locked { background: var(--bg-tertiary); border: 0.5px dashed var(--border); opacity: 0.5; }
+.row-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.row-badge { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 20px; }
+.rb-done { background: var(--green-light); color: var(--green); }
+.rb-active { background: var(--blue-light); color: var(--blue-dark); }
+.rb-editing { background: var(--amber-light); color: var(--amber); }
+.rb-locked { background: var(--bg-secondary); color: var(--text-secondary); }
+.done-summary { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.sku-entry { display: grid; grid-template-columns: 1fr 80px 34px; gap: 6px; align-items: center; margin-bottom: 6px; }
+.sku-entry select, .sku-entry input { margin-bottom: 0; font-size: 13px; padding: 8px 8px; }
+.del-btn { width: 34px; height: 38px; background: var(--red-light); color: var(--red); border: 0.5px solid #F7C1C1; border-radius: var(--radius-md); cursor: pointer; font-size: 17px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+/* Summary */
+.summary-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); }
+.summary-row:last-child { border-bottom: none; }
+.metric-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 4px; }
+.metric { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 10px 12px; }
+.metric-label { font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+.metric-val { font-size: 20px; font-weight: 600; }
+.time-block { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 12px; margin: 12px 0; }
+.time-row { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.time-row:last-child { margin-bottom: 0; }
+.t-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.t-dot.s { background: var(--green); }
+.t-dot.e { background: var(--red); }
+.t-label { font-size: 12px; color: var(--text-secondary); width: 54px; flex-shrink: 0; }
+.t-val { font-size: 14px; font-weight: 600; }
+.t-dur { font-size: 12px; color: var(--text-secondary); margin-left: auto; }
+.elapsed-bar { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 10px 14px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.restricted-banner { background: var(--red-light); border: 0.5px solid #F7C1C1; border-radius: var(--radius-md); padding: 12px; margin-bottom: 10px; font-size: 13px; color: var(--red); text-align: center; }
+
+/* Users list */
+.user-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+.user-row:last-child { border-bottom: none; }
+.sku-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); }
+.sku-row:last-child { border-bottom: none; }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.open { display: flex; }
+.modal-box { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 20px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+.modal-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.modal-msg { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
+
+/* My account highlight */
+.my-account-card { background: var(--bg-primary); border: 2px solid var(--blue); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 12px; }
+
+@media print {
+  .no-print { display: none !important; }
+  .app { max-width: 100%; padding: 0; }
+}
+.sync-bar{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:var(--radius-md);margin-bottom:10px;font-size:12px;font-weight:500;}
+.sync-bar.online{background:var(--green-light);color:var(--green);}
+.sync-bar.offline{background:var(--amber-light);color:var(--amber);}
+.sync-bar.syncing{background:var(--blue-light);color:var(--blue-dark);}
+.sync-bar.error{background:var(--red-light);color:var(--red);}
+.sdot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.b-cloud{background:var(--green-light);color:var(--green);font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-left:5px;}
+.b-local{background:var(--amber-light);color:var(--amber);font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;margin-left:5px;}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+<!-- CONFIRM MODAL -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-title">Confirm</div>
+    <div class="modal-msg" id="modal-msg"></div>
+    <button class="btn btn-danger" id="modal-confirm-btn">Confirm</button>
+    <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- EDIT USER MODAL -->
+<div class="modal-overlay" id="edit-user-modal">
+  <div class="modal-box">
+    <div class="modal-title">Edit user</div>
+    <div class="field-label">Username</div>
+    <input type="text" id="eu-username" autocomplete="off">
+    <div class="field-label">New PIN <span style="font-size:11px;color:var(--text-secondary);">(leave blank to keep current)</span></div>
+    <div class="pin-display" id="eu-pin-display"></div>
+    <div class="pin-pad" id="eu-pin-pad"></div>
+    <div id="eu-msg" style="font-size:13px;text-align:center;margin-bottom:10px;min-height:18px;color:var(--text-secondary);"></div>
+    <button class="btn btn-primary" onclick="saveEditUser()">Save changes</button>
+    <button class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- LOGIN -->
+<div class="screen active" id="screen-login">
+  <div style="text-align:center;padding:36px 0 24px;">
+    <div style="font-size:48px;margin-bottom:10px;">🚛</div>
+    <div style="font-size:22px;font-weight:700;">Truck Loading</div>
+    <div style="font-size:13px;color:var(--text-secondary);margin-top:4px;">Sign in to continue</div>
+  </div>
+  <div class="card">
+    <div class="field-label">Username</div>
+    <input type="text" id="login-username" placeholder="Enter username" autocomplete="off">
+    <div class="field-label">PIN</div>
+    <div class="pin-display" id="login-pin-display">
+      <div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>
+    </div>
+    <div class="pin-pad" id="login-pin-pad">
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','1')">1</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','2')">2</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','3')">3</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','4')">4</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','5')">5</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','6')">6</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','7')">7</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','8')">8</div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','9')">9</div>
+      <div></div>
+      <div class="pin-key" onclick="pinPress('pinLogin','login-pin-display','0')">0</div>
+      <div class="pin-key del-key" onclick="pinPress('pinLogin','login-pin-display','del')">&#9003;</div>
+    </div>
+    <div class="pin-error" id="login-error"></div>
+    <button class="btn btn-primary" onclick="doLogin()">Sign in</button>
+  </div>
+  <div id="login-sync" style="text-align:center;font-size:12px;color:var(--text-secondary);margin-top:8px;"></div>
+</div>
+
+<!-- HOME -->
+<div class="screen" id="screen-home">
+  <div class="top-bar">
+    <div><div style="font-size:18px;font-weight:700;">Truck Loading</div><div style="font-size:12px;color:var(--text-secondary);">Dispatch Management</div></div>
+    <div class="top-bar-right">
+      <div class="user-chip"><span class="role-dot" id="topbar-dot"></span><span id="topbar-name"></span></div>
+      <button class="btn btn-sm btn-secondary" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+  <div id="sync-bar"></div>
+  <div id="admin-bar"></div>
+  <div class="tab-bar">
+    <button class="tab active" onclick="homeTab('active',this)">Active</button>
+    <button class="tab" id="tab-done" onclick="homeTab('done',this)">Completed</button>
+  </div>
+  <div id="sessions-list"></div>
+  <button class="btn btn-primary" onclick="goTo('screen-new-session')">+ Start new loading session</button>
+</div>
+
+<!-- ADMIN PANEL -->
+<div class="screen" id="screen-admin">
+  <div class="nav-back" onclick="goTo('screen-home')">&#8592; Back</div>
+  <div class="page-title">Admin panel</div>
+  <div class="page-sub">Manage users and SKU master list</div>
+  <div class="admin-tabs">
+    <button class="admin-tab active" onclick="adminTab('users',this)">Users</button>
+    <button class="admin-tab" onclick="adminTab('skus',this)">SKU Master</button>
+  </div>
+  <div id="panel-users">
+    <div class="my-account-card">
+      <div style="font-size:13px;font-weight:600;color:var(--blue-dark);margin-bottom:10px;">My account</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:15px;font-weight:600;" id="my-acc-name"></div>
+          <div style="margin-top:3px;"><span class="badge badge-admin-r">admin</span></div>
+        </div>
+        <button class="btn btn-sm btn-warn" onclick="openEditUser('self')">Edit name &amp; PIN</button>
+      </div>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;">Add new user</div>
+      <div class="inline-row" style="margin-bottom:0;">
+        <div><div class="field-label">Username</div><input type="text" id="new-user-name" placeholder="e.g. raju" autocomplete="off" style="margin-bottom:0;"></div>
+        <div><div class="field-label">Role</div><select id="new-user-role" style="margin-bottom:0;"><option value="user">User</option><option value="admin">Admin</option></select></div>
+      </div>
+      <div style="margin-top:10px;"><div class="field-label">4-digit PIN</div>
+        <div class="pin-display" id="nu-pin-display"></div>
+        <div class="pin-pad" id="nu-pin-pad"></div>
+      </div>
+      <button class="btn btn-primary" onclick="addUser()">+ Add user</button>
+    </div>
+    <div class="card"><div id="users-list"></div></div>
+  </div>
+  <div id="panel-skus" style="display:none;">
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;">Add new SKU</div>
+      <div class="inline-row">
+        <input type="text" id="new-sku-name" placeholder="SKU name" style="margin-bottom:0;">
+        <input type="text" id="new-sku-unit" placeholder="Unit (box/bag)" style="margin-bottom:0;">
+      </div>
+      <button class="btn btn-primary" style="margin-top:10px;" onclick="addSKU()">+ Add SKU</button>
+    </div>
+    <div class="card"><div id="sku-list"></div></div>
+  </div>
+</div>
+
+<!-- NEW SESSION -->
+<div class="screen" id="screen-new-session">
+  <div class="nav-back" onclick="goTo('screen-home')">&#8592; Back</div>
+  <div class="page-title">New session</div>
+  <div class="page-sub">Enter truck and driver details</div>
+  <div class="card">
+    <div class="field-label">Date</div><input type="date" id="ns-date">
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">Truck number</div><input type="text" id="ns-truck" placeholder="e.g. UP78AT0123"></div>
+      <div><div class="field-label">Driver name</div><input type="text" id="ns-driver" placeholder="e.g. Vivek Kumar"></div>
+    </div>
+    <div class="field-label">Loading incharge</div><input type="text" id="ns-incharge" placeholder="e.g. Ramesh Singh">
+    <div class="field-label">Destination / Route</div><input type="text" id="ns-dest" placeholder="e.g. Lucknow Godown">
+    <div class="field-label">Truck size</div>
+    <div class="truck-grid">
+      <div class="truck-btn selected" id="tt-small" onclick="selectTruck('small')">
+        <div class="tt-icon">🚐</div><div class="tt-label">Small truck</div><div class="tt-rows">Up to 10–12 rows</div>
+      </div>
+      <div class="truck-btn" id="tt-large" onclick="selectTruck('large')">
+        <div class="tt-icon">🚛</div><div class="tt-label">Large truck</div><div class="tt-rows">Up to 18–20 rows</div>
+      </div>
+    </div>
+    <div class="field-label">Number of rows</div>
+    <input type="number" id="ns-rows" value="10" min="1" max="30">
+    <div class="rows-hint" id="rows-hint">Typical range for small truck: 10–12 rows</div>
+    <button class="btn btn-primary" onclick="createSession()">Start loading</button>
+    <button class="btn btn-secondary" onclick="goTo('screen-home')">Cancel</button>
+  </div>
+</div>
+
+<!-- EDIT SESSION -->
+<div class="screen" id="screen-edit-session">
+  <div class="nav-back" onclick="cancelEditSession()">&#8592; Back</div>
+  <div class="page-title">Edit session details</div>
+  <div class="card">
+    <div class="field-label">Date</div><input type="date" id="es-date">
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">Truck number</div><input type="text" id="es-truck"></div>
+      <div><div class="field-label">Driver name</div><input type="text" id="es-driver"></div>
+    </div>
+    <div class="field-label">Loading incharge</div><input type="text" id="es-incharge">
+    <div class="field-label">Destination / Route</div><input type="text" id="es-dest">
+    <button class="btn btn-primary" onclick="saveEditSession()">Save changes</button>
+    <button class="btn btn-secondary" onclick="cancelEditSession()">Cancel</button>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div class="screen" id="screen-loading">
+  <div class="nav-back no-print" onclick="goTo('screen-home')">&#8592; Back to sessions</div>
+  <div id="loading-header"></div>
+  <div id="elapsed-display"></div>
+  <div id="rows-container"></div>
+  <div class="no-print" style="margin-top:8px;">
+    <button class="btn btn-success" onclick="finaliseSession()">Finalise &amp; view totals</button>
+  </div>
+</div>
+
+<!-- SUMMARY -->
+<div class="screen" id="screen-summary">
+  <div class="nav-back no-print" onclick="backToLoading()">&#8592; Back to loading</div>
+  <div id="summary-header"></div>
+  <div class="card">
+    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">SKU totals</div>
+    <div id="totals-list"></div>
+  </div>
+  <div class="card no-print">
+    <div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Row-wise breakdown</div>
+    <div id="rowwise-list"></div>
+  </div>
+  <div class="no-print" id="summary-actions"></div>
+</div>
+
+</div>
+
+<!-- PIN handler — isolated script, loads first, no dependencies -->
+<script>
+window.pinVals = {pinLogin:'', pinNewUser:'', pinEU:''};
+function pinPress(vn, di, k) {
+  var v = window.pinVals[vn] || '';
+  if (k === 'del') { v = v.slice(0, -1); }
+  else if (v.length < 4) { v += k; }
+  window.pinVals[vn] = v;
+  window[vn] = v; // keep window.pinLogin etc in sync too
+  var el = document.getElementById(di);
+  if (el) {
+    el.innerHTML = '';
+    for (var i = 0; i < 4; i++) {
+      var dot = document.createElement('div');
+      dot.className = 'pin-dot' + (i < v.length ? ' filled' : '');
+      el.appendChild(dot);
+    }
+  }
+  if (vn === 'pinEU') {
+    var m = document.getElementById('eu-msg');
+    if (m) m.textContent = v.length ? v.length + '/4 digits' : '';
+  }
+}
+</script>
+
+<!-- Firebase via compat CDN -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script>
+try {
+  const _fbApp = firebase.initializeApp({
+    apiKey:"AIzaSyCiRV8C1smeo9L6DCWaZ7tUIwmomMeONKg",
+    authDomain:"truck-loading-app-a053f.firebaseapp.com",
+    projectId:"truck-loading-app-a053f",
+    storageBucket:"truck-loading-app-a053f.firebasestorage.app",
+    messagingSenderId:"856836961666",
+    appId:"1:856836961666:web:dbdfe6219397fa07818b9b"
+  });
+  const _db = firebase.firestore();
+  window._fb = {
+    async saveSession(s){try{await _db.collection("sessions").doc(s.id).set(s);return true;}catch(e){return false;}},
+    async loadSessions(){try{const sn=await _db.collection("sessions").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
+    async saveUsers(u){try{await _db.collection("config").doc("users").set({list:u});return true;}catch(e){return false;}},
+    async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
+    async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{});}
+  };
+  window._fbOK = true;
+  window.dispatchEvent(new Event('fbReady'));
+} catch(e) {
+  console.warn('Firebase init failed:', e);
+  window._fb = null;
+  window._fbOK = false;
+}
+</script>
+<script>
+const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1'};
+let CU=null,curSessId=null,homeFilter='active',truckType='small';
+let pendingModal=null,editSessId=null,elTimer=null;
+let editRowIdx=-1,liveRows=[],editRowSnap=null;
+let editUserId=null,fbListener=null;
+let isOnline=navigator.onLine,fbOK=false;
+window.pinLogin=''; window.pinNewUser=''; window.pinEU='';
+
+// Pending queue
+function getPQ(){try{return JSON.parse(localStorage.getItem(K.PENDING))||[];}catch(e){return[];}}
+function setPQ(p){localStorage.setItem(K.PENDING,JSON.stringify(p));}
+function addPQ(type,id){const p=getPQ();if(!p.find(x=>x.type===type&&x.id===id))p.push({type,id});setPQ(p);}
+function delPQ(type,id){setPQ(getPQ().filter(x=>!(x.type===type&&x.id===id)));}
+
+// Online/offline
+window.addEventListener('online',()=>{isOnline=true;setSyncBar('syncing','Back online — syncing...');syncQueue();});
+window.addEventListener('offline',()=>{isOnline=false;setSyncBar('offline','Offline — data saved locally, will sync when connected');});
+window.addEventListener('fbReady',()=>{fbOK=true;if(isOnline){setSyncBar('online','Connected — data syncs across all devices');syncQueue();}else setSyncBar('offline','Offline — data saved locally');});
+// Firebase may have already fired before this script loaded — catch up
+if(window._fbOK){fbOK=true;if(isOnline){setSyncBar('online','Connected — data syncs across all devices');syncQueue();}else setSyncBar('offline','Offline — data saved locally');}
+
+function setSyncBar(state,msg){
+  const icons={online:'✅',offline:'⚠️',syncing:'🔄',error:'❌'};
+  const colors={online:'green',offline:'amber',syncing:'blue',error:'red'};
+  const sb=document.getElementById('sync-bar');
+  if(sb)sb.innerHTML=`<div class="sync-bar ${state}"><span class="sdot" style="background:currentColor;opacity:.7;"></span>${icons[state]||''} ${msg}</div>`;
+}
+
+async function syncQueue(){
+  if(!fbOK||!isOnline)return;
+  const q=getPQ();if(!q.length){setSyncBar('online','Connected — all data synced');return;}
+  setSyncBar('syncing',`Syncing ${q.length} item(s)...`);
+  let fail=0;
+  for(const item of q){
+    try{
+      if(item.type==='session'){const s=loadSessions().find(x=>x.id===item.id);if(s){const ok=await window._fb.saveSession(s);if(ok)delPQ('session',item.id);else fail++;}else delPQ('session',item.id);}
+      else if(item.type==='users'){const ok=await window._fb.saveUsers(loadUsersLocal());if(ok)delPQ('users','users');else fail++;}
+      else if(item.type==='skus'){const ok=await window._fb.saveSKUs(loadSKUsLocal());if(ok)delPQ('skus','skus');else fail++;}
+    }catch(e){fail++;}
+  }
+  if(fail)setSyncBar('error',`${fail} item(s) failed — will retry`);
+  else setSyncBar('online','Connected — all data synced');
+}
+
+async function pullCloud(){
+  if(!fbOK||!isOnline)return;
+  try{
+    const cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
+    const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
+    const csess=await window._fb.loadSessions();
+    if(csess&&csess.length){
+      const loc=loadSessions();const m={};
+      loc.forEach(s=>m[s.id]=s);
+      csess.forEach(s=>{if(!m[s.id])m[s.id]=s;else if(s.done)m[s.id]=s;});
+      SS(K.SESSIONS,Object.values(m));
+    }
+  }catch(e){}
+}
+
+function startCloudListener(){
+  if(!fbOK||!isOnline||!CU||CU.role!=='admin')return;
+  if(fbListener){fbListener();fbListener=null;}
+  fbListener=window._fb.listenDone(doneSessions=>{
+    if(!doneSessions.length)return;
+    const loc=loadSessions();let changed=false;
+    doneSessions.forEach(cs=>{const i=loc.findIndex(s=>s.id===cs.id);if(i<0){loc.push(cs);changed=true;}else if(!loc[i].done){loc[i]=cs;changed=true;}});
+    if(changed){SS(K.SESSIONS,loc);if(homeFilter==='done')renderHome();}
+  });
+}
+
+function LS(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
+function SS(k,v){localStorage.setItem(k,JSON.stringify(v));}
+function loadUsersLocal(){const u=LS(K.USERS);if(u&&u.length)return u;const d=[{id:'admin',username:'admin',pin:'1234',role:'admin'}];SS(K.USERS,d);return d;}
+function loadUsers(){return loadUsersLocal();}
+async function saveUsersSmart(u){SS(K.USERS,u);if(fbOK&&isOnline){const ok=await window._fb.saveUsers(u);if(!ok)addPQ('users','users');}else addPQ('users','users');}
+function saveUsers(u){SS(K.USERS,u);saveUsersSmart(u);}
+function loadSKUsLocal(){return LS(K.SKUS)||[{id:1,name:'Kala Bhoot',unit:'bag'},{id:2,name:'Kuch Kuch',unit:'box'},{id:3,name:'Sev Dana',unit:'box'},{id:4,name:'Makeup Box',unit:'bag'},{id:5,name:'Aloo Bhujia',unit:'box'},{id:6,name:'Dilkush',unit:'bag'}];}
+function loadSKUs(){return loadSKUsLocal();}
+async function saveSKUsSmart(s){SS(K.SKUS,s);if(fbOK&&isOnline){const ok=await window._fb.saveSKUs(s);if(!ok)addPQ('skus','skus');}else addPQ('skus','skus');}
+function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
+function loadSessions(){return LS(K.SESSIONS)||[];}
+function saveSessions(s){SS(K.SESSIONS,s);}
+function isAdmin(){return CU&&CU.role==='admin';}
+function clone(o){return JSON.parse(JSON.stringify(o));}
+
+// PIN
+function buildPin(padId, dispId, varName){
+  window[varName]='';
+  var el=document.getElementById(dispId);
+  if(el) el.innerHTML='<div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div><div class="pin-dot"></div>';
+  var pad=document.getElementById(padId);
+  if(!pad) return;
+  var keys=['1','2','3','4','5','6','7','8','9','','0','del'];
+  pad.innerHTML=keys.map(function(k){
+    if(k==='') return '<div></div>';
+    if(k==='del') return '<div class="pin-key del-key" onclick="pinPress(\''+varName+'\',\''+dispId+'\',\'del\')">&#9003;</div>';
+    return '<div class="pin-key" onclick="pinPress(\''+varName+'\',\''+dispId+'\',\''+k+'\')">'+k+'</div>';
+  }).join('');
+}
+function updatePinDisp(id,v){var el=document.getElementById(id);if(!el)return;el.innerHTML=[0,1,2,3].map(function(i){return '<div class="pin-dot'+(i<v.length?' filled':'')+'"></div>';}).join('');}
+// Global PIN click handler
+document.addEventListener('click', function(e){
+  const t=e.target.closest('.pin-key');
+  if(!t)return;
+  const vn=t.dataset.pv, di=t.dataset.pd, k=t.dataset.pk;
+  if(!vn||!di||!k)return;
+  pinPress(vn,di,k);
+});
+
+// Login
+function initLogin(){
+  if(window.pinVals) window.pinVals.pinLogin='';
+  window.pinLogin='';
+  updatePinDisp('login-pin-display','');
+  var le=document.getElementById('login-error');if(le)le.textContent='';
+  var lu=document.getElementById('login-username');if(lu)lu.value='';
+  var ls=document.getElementById('login-sync');
+  if(ls)ls.textContent=(isOnline&&fbOK)?'🟢 Connected to cloud':'🟡 Offline mode — using local data';
+}
+async function doLogin(){
+  var u = document.getElementById('login-username').value.trim().toLowerCase();
+  var p = window.pinLogin || '';
+  var errEl = document.getElementById('login-error');
+  if(!u){ errEl.style.color='var(--red)'; errEl.textContent='Please enter your username.'; return; }
+  if(p.length < 4){ errEl.style.color='var(--red)'; errEl.textContent='Please enter your 4-digit PIN.'; return; }
+  errEl.style.color='var(--text-secondary)';
+  errEl.textContent='Signing in...';
+  // Check local first
+  var user = loadUsersLocal().find(function(x){ return x.username.toLowerCase()===u && x.pin===p; });
+  if(user){
+    CU = user;
+    errEl.textContent='';
+    try{ startCloudListener(); }catch(e){}
+    try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; return; }
+    pullCloud().catch(function(){});
+    return;
+  }
+  // Try cloud
+  errEl.textContent='Checking cloud...';
+  try { await pullCloud(); } catch(e){}
+  user = loadUsersLocal().find(function(x){ return x.username.toLowerCase()===u && x.pin===p; });
+  if(!user){
+    errEl.style.color='var(--red)';
+    errEl.textContent='Incorrect username or PIN.';
+    window.pinLogin='';
+    if(window.pinVals) window.pinVals.pinLogin='';
+    updatePinDisp('login-pin-display','');
+    return;
+  }
+  CU = user;
+  errEl.textContent='';
+  try{ startCloudListener(); }catch(e){}
+  try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; }
+}
+function doLogout(){CU=null;editRowIdx=-1;liveRows=[];if(fbListener){fbListener();fbListener=null;}stopTimer();goTo('screen-login');initLogin();}
+
+// Modal
+function showModal(title,msg,cb){
+  var t=document.getElementById('modal-title');if(t)t.textContent=title;
+  var m=document.getElementById('modal-msg');if(m)m.textContent=msg;
+  pendingModal=cb;
+  var mo=document.getElementById('confirm-modal');if(mo)mo.classList.add('open');
+}
+function closeModal(){
+  var mo=document.getElementById('confirm-modal');if(mo)mo.classList.remove('open');
+  pendingModal=null;
+}
+// Attach modal confirm — deferred so DOM is ready
+window.addEventListener('DOMContentLoaded', function(){
+  var btn=document.getElementById('modal-confirm-btn');
+  if(btn) btn.onclick=function(){closeModal();if(pendingModal)pendingModal();};
+});
+
+// Edit user modal
+function openEditUser(id){
+  const users=loadUsers(),uid=id==='self'?CU.id:id,user=users.find(u=>u.id===uid);
+  if(!user)return; editUserId=uid;
+  window.pinEU=''; buildPin('eu-pin-pad','eu-pin-display','pinEU');
+  document.getElementById('eu-username').value=user.username;
+  document.getElementById('eu-msg').textContent='Leave PIN blank to keep current PIN';
+  document.getElementById('eu-msg').style.color='var(--text-secondary)';
+  document.getElementById('edit-user-modal').classList.add('open');
+}
+function closeEditUserModal(){document.getElementById('edit-user-modal').classList.remove('open');editUserId=null;window.pinEU='';}
+function saveEditUser(){
+  const name=document.getElementById('eu-username').value.trim().toLowerCase(),pin=window.pinEU;
+  const msg=document.getElementById('eu-msg');
+  if(!name){msg.textContent='Username cannot be empty.';msg.style.color='var(--red)';return;}
+  if(pin.length>0&&pin.length<4){msg.textContent='PIN must be exactly 4 digits.';msg.style.color='var(--red)';return;}
+  const users=loadUsers();
+  if(users.find(u=>u.username.toLowerCase()===name&&u.id!==editUserId)){msg.textContent='Username already taken.';msg.style.color='var(--red)';return;}
+  const idx=users.findIndex(u=>u.id===editUserId);if(idx<0)return;
+  users[idx].username=name;if(pin.length===4)users[idx].pin=pin;
+  saveUsers(users);
+  if(editUserId===CU.id){CU=users[idx];const n=document.getElementById('topbar-name');if(n)n.textContent=CU.username;}
+  closeEditUserModal(); renderAdminUsers();
+}
+
+// Routing
+function goTo(s){
+  stopTimer();
+  var cm=document.getElementById('confirm-modal');if(cm)cm.classList.remove('open');
+  var em=document.getElementById('edit-user-modal');if(em)em.classList.remove('open');
+  document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
+  var target=document.getElementById(s);
+  if(!target){console.warn('Screen not found:',s);return;}
+  target.classList.add('active');
+  if(s==='screen-home')renderHome();
+  if(s==='screen-admin'){renderAdminUsers();renderSKUs();}
+  if(s==='screen-login')initLogin();
+}
+
+// Home
+function homeTab(f,btn){
+  if(f==='done'&&!isAdmin()){alert('Only admins can view completed sessions.');return;}
+  homeFilter=f; document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); renderHome();
+}
+function renderHome(){
+  document.getElementById('topbar-name').textContent=CU?CU.username:'';
+  const dot=document.getElementById('topbar-dot');if(dot)dot.className='role-dot '+(isAdmin()?'admin':'user');
+  const pend=getPQ().length;
+  if(isOnline&&fbOK&&!pend)setSyncBar('online','Connected — all data synced across devices');
+  else if(isOnline&&fbOK&&pend)setSyncBar('syncing',`Syncing ${pend} item(s)...`);
+  else setSyncBar('offline','Offline — changes will sync when connected');
+  document.getElementById('admin-bar').innerHTML=isAdmin()?`<button class="btn btn-warn no-print" style="margin-bottom:12px;" onclick="goTo('screen-admin')">&#9881; Admin panel</button>`:'';
+  const td=document.getElementById('tab-done');if(td)td.style.opacity=isAdmin()?'1':'0.4';
+  const sessions=loadSessions().filter(s=>homeFilter==='active'?!s.done:s.done);
+  const el=document.getElementById('sessions-list');
+  if(!sessions.length){el.innerHTML=`<div class="empty-state">${homeFilter==='active'?'No active sessions.':'No completed sessions.'}</div>`;return;}
+  el.innerHTML=sessions.slice().reverse().map(s=>`
+    <div class="session-card">
+      <div class="session-info" onclick="openSession('${s.id}')">
+        <div class="session-truck">${s.truck}<span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
+        <div class="session-meta">${s.driver}${s.incharge?' · IC: '+s.incharge:''} · ${s.date} · ${s.rows} rows</div>
+        ${s.dest?`<div class="session-dest">→ ${s.dest}</div>`:''}
+        ${s.startTime?`<div class="session-time">Started ${fmt12(s.startTime)}${s.endTime?' · Finished '+fmt12(s.endTime):''}</div>`:''}
+      </div>
+      <div class="session-actions">
+        <span class="badge ${s.done?'badge-done':'badge-active-s'}">${s.done?'Done':'Active'}</span>
+        ${isAdmin()?`<button class="icon-btn" onclick="startEditSess('${s.id}')">✏️</button>`:''}
+        ${isAdmin()?`<button class="icon-btn del" onclick="confirmDel('${s.id}','${s.truck}')">🗑️</button>`:''}
+      </div>
+    </div>`).join('');
+}
+
+// Admin
+function adminTab(tab,btn){
+  document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
+  document.getElementById('panel-users').style.display=tab==='users'?'':'none';
+  document.getElementById('panel-skus').style.display=tab==='skus'?'':'none';
+  if(tab==='users')renderAdminUsers(); if(tab==='skus')renderSKUs();
+}
+function renderAdminUsers(){
+  document.getElementById('my-acc-name').textContent=CU?CU.username:'';
+  buildPin('nu-pin-pad','nu-pin-display','pinNewUser');
+  const others=loadUsers().filter(u=>u.id!==CU.id);
+  const el=document.getElementById('users-list');
+  el.innerHTML=others.length?others.map(u=>`
+    <div class="user-row">
+      <div><div style="font-size:14px;font-weight:600;">${u.username}</div><span class="badge ${u.role==='admin'?'badge-admin-r':'badge-user-r'}">${u.role}</span></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-secondary" onclick="openEditUser('${u.id}')">Edit</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Remove</button>
+      </div>
+    </div>`).join(''):'<div style="font-size:13px;color:var(--text-secondary);">No other users yet.</div>';
+}
+function addUser(){
+  const name=document.getElementById('new-user-name').value.trim().toLowerCase(),role=document.getElementById('new-user-role').value,pin=window.pinNewUser;
+  if(!name){alert('Please enter a username.');return;} if(pin.length<4){alert('Please enter a 4-digit PIN.');return;}
+  const users=loadUsers();if(users.find(u=>u.username===name)){alert('Username already exists.');return;}
+  users.push({id:'u'+Date.now(),username:name,pin,role});saveUsers(users);
+  document.getElementById('new-user-name').value='';buildPin('nu-pin-pad','nu-pin-display','pinNewUser');renderAdminUsers();
+}
+function deleteUser(id){showModal('Remove user','Remove this user? They will no longer be able to log in.',()=>{saveUsers(loadUsers().filter(u=>u.id!==id));renderAdminUsers();});}
+
+// SKUs
+function renderSKUs(){
+  const skus=loadSKUs();
+  document.getElementById('sku-list').innerHTML=skus.length
+    ?skus.map(sk=>`<div class="sku-row"><div><div style="font-size:14px;font-weight:600;">${sk.name}</div><div style="font-size:12px;color:var(--text-secondary);">${sk.unit}</div></div><button class="btn btn-sm btn-danger" onclick="deleteSKU(${sk.id})">Remove</button></div>`).join('')
+    :'<div style="font-size:13px;color:var(--text-secondary);">No SKUs yet.</div>';
+}
+function addSKU(){
+  const name=document.getElementById('new-sku-name').value.trim(),unit=document.getElementById('new-sku-unit').value.trim();
+  if(!name){alert('Please enter a SKU name.');return;}
+  const skus=loadSKUs();skus.push({id:Date.now(),name,unit:unit||'unit'});saveSKUs(skus);
+  document.getElementById('new-sku-name').value='';document.getElementById('new-sku-unit').value='';renderSKUs();
+}
+function deleteSKU(id){showModal('Remove SKU','Remove this SKU from master list?',()=>{saveSKUs(loadSKUs().filter(s=>s.id!==id));renderSKUs();});}
+
+// Sessions
+function getSess(id){return loadSessions().find(s=>s.id===id);}
+function saveSess(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id);if(i>=0)ss[i]=sess;else ss.push(sess);saveSessions(ss);}
+function persistLive(){const s=getSess(curSessId);s.rowData=clone(liveRows);saveSess(s);}
+function confirmDel(id,truck){showModal('Delete session',`Delete session for ${truck}? Cannot be undone.`,()=>{saveSessions(loadSessions().filter(s=>s.id!==id));renderHome();});}
+async function finaliseSession(){
+  persistLive();const s=getSess(curSessId);s.done=true;s.endTime=new Date().toISOString();s.synced=false;
+  saveSess(s);stopTimer();editRowIdx=-1;
+  setSyncBar('syncing','Uploading completed session to cloud...');
+  if(fbOK&&isOnline){
+    const ok=await window._fb.saveSession({...s,synced:true});
+    if(ok){s.synced=true;saveSess(s);setSyncBar('online','✅ Uploaded — admin can now view the report');}
+    else{addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
+  }else{addPQ('session',s.id);setSyncBar('offline','📱 Saved locally — will upload when back online');}
+  renderSummary(curSessId);goTo('screen-summary');
+}
+function startEditSess(id){
+  editSessId=id;const s=getSess(id);
+  document.getElementById('es-date').value=s.date||'';document.getElementById('es-truck').value=s.truck||'';
+  document.getElementById('es-driver').value=s.driver||'';document.getElementById('es-incharge').value=s.incharge||'';
+  document.getElementById('es-dest').value=s.dest||'';goTo('screen-edit-session');
+}
+function cancelEditSession(){editSessId=null;goTo('screen-home');}
+function saveEditSession(){
+  const s=getSess(editSessId);
+  s.date=document.getElementById('es-date').value;s.truck=document.getElementById('es-truck').value.trim();
+  s.driver=document.getElementById('es-driver').value.trim();s.incharge=document.getElementById('es-incharge').value.trim();
+  s.dest=document.getElementById('es-dest').value.trim();
+  if(!s.truck||!s.driver){alert('Truck number and driver name required.');return;}
+  saveSess(s);editSessId=null;goTo('screen-home');
+}
+function selectTruck(type){
+  truckType=type;
+  const TT={small:{r:10,mn:1,mx:12,h:'Typical range: 10–12 rows'},large:{r:18,mn:13,mx:30,h:'Typical range: 18–20 rows'}};
+  document.getElementById('tt-small').classList.toggle('selected',type==='small');
+  document.getElementById('tt-large').classList.toggle('selected',type==='large');
+  const t=TT[type];document.getElementById('ns-rows').value=t.r;document.getElementById('ns-rows').min=t.mn;document.getElementById('ns-rows').max=t.mx;document.getElementById('rows-hint').textContent=t.h;
+}
+function createSession(){
+  const date=document.getElementById('ns-date').value,truck=document.getElementById('ns-truck').value.trim(),driver=document.getElementById('ns-driver').value.trim();
+  const incharge=document.getElementById('ns-incharge').value.trim(),dest=document.getElementById('ns-dest').value.trim(),rows=parseInt(document.getElementById('ns-rows').value)||10;
+  if(!truck||!driver){alert('Please fill truck number and driver name.');return;}
+  const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
+  const ss=loadSessions();ss.push({id,date,truck,driver,incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username});
+  saveSessions(ss);curSessId=id;editRowIdx=-1;liveRows=clone(rowData);renderLoading(id);goTo('screen-loading');
+}
+function openSession(id){
+  curSessId=id;editRowIdx=-1;const s=getSess(id);
+  if(s.done){if(!isAdmin()){alert('Only admins can view completed reports.');return;}liveRows=clone(s.rowData);renderSummary(id);goTo('screen-summary');}
+  else{liveRows=clone(s.rowData);renderLoading(id);goTo('screen-loading');}
+}
+
+// Time
+function fmt12(iso){if(!iso)return '—';const d=new Date(iso);let h=d.getHours(),m=d.getMinutes();const ap=h>=12?'PM':'AM';h=h%12||12;return `${h}:${String(m).padStart(2,'0')} ${ap}`;}
+function fmtDur(ms){if(!ms||ms<0)return '—';const tm=Math.floor(ms/60000),h=Math.floor(tm/60),m=tm%60;return h>0?`${h}h ${m}m`:`${m} min`;}
+function elapsed(iso){return iso?fmtDur(Date.now()-new Date(iso).getTime()):'—';}
+function rowFilled(r){return r.entries.some(e=>e.skuId&&parseFloat(e.qty)>0);}
+function nextRow(rd){for(let i=0;i<rd.length;i++)if(!rowFilled(rd[i]))return i;return rd.length;}
+function elHTML(s){if(!s.startTime)return '';return `<div class="elapsed-bar no-print"><span style="font-size:12px;color:var(--text-secondary);">Loading in progress</span><span style="font-size:13px;font-weight:600;color:var(--blue);">Elapsed: ${elapsed(s.startTime)}</span></div>`;}
+function stopTimer(){if(elTimer){clearInterval(elTimer);elTimer=null;}}
+function startTimer(id){stopTimer();elTimer=setInterval(()=>{const s=getSess(id);if(!s||s.done){stopTimer();return;}const el=document.getElementById('elapsed-display');if(el)el.innerHTML=elHTML(s);},30000);}
+
+// Loading
+function renderLoading(id){
+  const s=getSess(id),skus=loadSKUs();
+  document.getElementById('loading-header').innerHTML=`
+    <div class="card no-print">
+      <div style="font-size:16px;font-weight:700;">${s.truck} <span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
+      <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
+      ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:''}
+      ${s.startTime?`<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Started: <b>${fmt12(s.startTime)}</b></div>`:''}
+    </div>`;
+  document.getElementById('elapsed-display').innerHTML=elHTML(s);
+  startTimer(id);
+  document.getElementById('rows-container').innerHTML=liveRows.map((row,ri)=>{
+    const filled=rowFilled(row),isEdit=(ri===editRowIdx),locked=(ri>nextRow(liveRows)&&!isEdit);
+    if(locked)return `<div class="row-card state-locked"><div class="row-header"><span class="row-badge rb-locked">Row ${row.row}</span><span style="font-size:12px;color:var(--text-secondary);">🔒 Complete row ${nextRow(liveRows)+1} first</span></div></div>`;
+    if(filled&&!isEdit){
+      const sum=row.entries.filter(e=>e.skuId&&parseFloat(e.qty)>0).map(e=>{const sk=skus.find(x=>x.id==e.skuId);return sk?`${sk.name}: ${e.qty} ${sk.unit}`:''}).filter(Boolean).join(' · ');
+      return `<div class="row-card state-done"><div class="row-header"><span class="row-badge rb-done">✓ Row ${row.row}</span><button class="btn btn-sm btn-secondary no-print" onclick="startEditRow(${ri})">Edit</button></div><div class="done-summary">${sum}</div></div>`;
+    }
+    return activeRowHTML(ri,row,skus,isEdit);
+  }).join('');
+}
+function activeRowHTML(ri,row,skus,edit){
+  const entries=row.entries.map((e,ei)=>`
+    <div class="sku-entry">
+      <select onchange="onSku(${ri},${ei},this.value)">
+        <option value="">-- Select SKU --</option>
+        ${skus.map(sk=>`<option value="${sk.id}" ${sk.id==e.skuId?'selected':''}>${sk.name}</option>`).join('')}
+      </select>
+      <input type="number" min="0" value="${e.qty||''}" placeholder="Qty" onchange="onQty(${ri},${ei},this.value)">
+      <button class="del-btn" onclick="delEntry(${ri},${ei})">×</button>
+    </div>`).join('');
+  if(edit)return `<div class="row-card state-editing">
+    <div class="row-header"><span class="row-badge rb-editing">✏️ Editing Row ${row.row}</span><button class="btn btn-sm btn-secondary no-print" onclick="cancelEditRow(${ri})">Cancel</button></div>
+    <div style="font-size:12px;color:var(--amber);margin-bottom:8px;">Edit then tap "Save row ${row.row}"</div>
+    <div id="entries-${ri}">${entries}</div>
+    <button class="btn btn-sm btn-secondary no-print" style="margin:6px 0 8px;" onclick="addEntry(${ri})">+ Add SKU</button>
+    <button class="btn btn-primary no-print" style="margin-bottom:0;" onclick="saveEditRow(${ri})">Save row ${row.row}</button>
+  </div>`;
+  return `<div class="row-card state-active">
+    <div class="row-header"><span class="row-badge rb-active">Row ${row.row}</span><button class="btn btn-sm btn-secondary no-print" onclick="addEntry(${ri})">+ Add SKU</button></div>
+    <div id="entries-${ri}">${entries}</div>
+    ${!row.entries.length?'<div style="font-size:12px;color:var(--text-secondary);padding:4px 0;">Tap "+ Add SKU" to begin</div>':''}
+    ${row.entries.length?`<button class="btn btn-primary no-print save-row-btn" style="margin-top:8px;margin-bottom:0;" onclick="confirmRow(${ri})">Save row ${row.row} & continue →</button>`:''}
+  </div>`;
+}
+function flushDOM(ri){
+  const c=document.getElementById('entries-'+ri);if(!c)return;
+  liveRows[ri].entries=Array.from(c.querySelectorAll('.sku-entry')).map(r=>({skuId:parseInt(r.querySelector('select').value)||r.querySelector('select').value||'',qty:parseFloat(r.querySelector('input').value)||0}));
+}
+function onSku(ri,ei,v){liveRows[ri].entries[ei].skuId=parseInt(v)||v||'';}
+function onQty(ri,ei,v){liveRows[ri].entries[ei].qty=parseFloat(v)||0;}
+function addEntry(ri){flushDOM(ri);liveRows[ri].entries.push({skuId:'',qty:0});refreshEntries(ri);}
+function delEntry(ri,ei){flushDOM(ri);liveRows[ri].entries.splice(ei,1);refreshEntries(ri);}
+function refreshEntries(ri){
+  const skus=loadSKUs(),row=liveRows[ri],isEdit=(ri===editRowIdx);
+  const html=row.entries.map((e,ei)=>`
+    <div class="sku-entry">
+      <select onchange="onSku(${ri},${ei},this.value)">
+        <option value="">-- Select SKU --</option>
+        ${skus.map(sk=>`<option value="${sk.id}" ${sk.id==e.skuId?'selected':''}>${sk.name}</option>`).join('')}
+      </select>
+      <input type="number" min="0" value="${e.qty||''}" placeholder="Qty" onchange="onQty(${ri},${ei},this.value)">
+      <button class="del-btn" onclick="delEntry(${ri},${ei})">×</button>
+    </div>`).join('');
+  const c=document.getElementById('entries-'+ri);if(c)c.innerHTML=html;
+  if(!isEdit){
+    const card=c?c.closest('.row-card'):null;
+    if(card){
+      const ob=card.querySelector('.save-row-btn');if(ob)ob.remove();
+      const oh=card.querySelector('.empty-hint');if(oh)oh.remove();
+      if(!row.entries.length){const h=document.createElement('div');h.className='empty-hint';h.style.cssText='font-size:12px;color:var(--text-secondary);padding:4px 0;';h.textContent='Tap "+ Add SKU" to begin';card.appendChild(h);}
+      else{const b=document.createElement('button');b.className='btn btn-primary no-print save-row-btn';b.style.cssText='margin-top:8px;margin-bottom:0;';b.innerHTML=`Save row ${row.row} & continue →`;b.onclick=()=>confirmRow(ri);card.appendChild(b);}
+    }
+  }
+}
+function confirmRow(ri){
+  flushDOM(ri);const v=liveRows[ri].entries.filter(e=>e.skuId&&parseFloat(e.qty)>0);
+  if(!v.length){alert(`Add at least one SKU with quantity to Row ${ri+1}.`);return;}
+  liveRows[ri].entries=v;persistLive();editRowIdx=-1;renderLoading(curSessId);
+  setTimeout(()=>{const a=document.querySelector('.row-card.state-active');if(a)a.scrollIntoView({behavior:'smooth',block:'start'});},100);
+}
+function startEditRow(ri){editRowSnap=clone(liveRows[ri].entries);editRowIdx=ri;renderLoading(curSessId);setTimeout(()=>{const c=document.querySelector('.row-card.state-editing');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},80);}
+function cancelEditRow(ri){liveRows[ri].entries=clone(editRowSnap);editRowSnap=null;editRowIdx=-1;renderLoading(curSessId);}
+function saveEditRow(ri){
+  flushDOM(ri);const v=liveRows[ri].entries.filter(e=>e.skuId&&parseFloat(e.qty)>0);
+  if(!v.length){alert(`Row ${ri+1} must have at least one SKU.`);return;}
+  liveRows[ri].entries=v;persistLive();editRowSnap=null;editRowIdx=-1;renderLoading(curSessId);
+}
+async function finaliseSession(){
+  persistLive();const s=getSess(curSessId);s.done=true;s.endTime=new Date().toISOString();s.synced=false;
+  saveSess(s);stopTimer();editRowIdx=-1;
+  setSyncBar('syncing','Uploading completed session to cloud...');
+  if(fbOK&&isOnline){
+    const ok=await window._fb.saveSession({...s,synced:true});
+    if(ok){s.synced=true;saveSess(s);setSyncBar('online','✅ Uploaded — admin can now view the report');}
+    else{addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
+  }else{addPQ('session',s.id);setSyncBar('offline','📱 Saved locally — will upload when back online');}
+  renderSummary(curSessId);goTo('screen-summary');
+}
+function backToLoading(){
+  const s=getSess(curSessId);s.done=false;s.endTime=null;saveSess(s);
+  editRowIdx=-1;liveRows=clone(s.rowData);renderLoading(curSessId);goTo('screen-loading');
+}
+
+// Summary
+function calcTotals(rowData){
+  const skus=loadSKUs(),t={};
+  rowData.forEach(r=>r.entries.forEach(e=>{if(!e.skuId||!e.qty)return;const sk=skus.find(x=>x.id==e.skuId);if(!sk)return;if(!t[sk.id])t[sk.id]={name:sk.name,unit:sk.unit,qty:0};t[sk.id].qty+=parseFloat(e.qty)||0;}));
+  return Object.values(t);
+}
+function renderSummary(id){
+  const s=getSess(id),skus=loadSKUs(),totals=calcTotals(s.rowData);
+  const total=totals.reduce((a,b)=>a+b.qty,0),filled=s.rowData.filter(r=>rowFilled(r)).length;
+  const dur=(s.startTime&&s.endTime)?fmtDur(new Date(s.endTime)-new Date(s.startTime)):'—';
+  const syncBadge=s.synced?'<span class="b-cloud">☁️ Synced</span>':'<span class="b-local">📱 Local</span>';
+  document.getElementById('summary-header').innerHTML=`
+    <div class="card">
+      <div style="font-size:16px;font-weight:700;">${s.truck} <span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span>${syncBadge}</div>
+      <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
+      ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:''}
+      <div class="time-block">
+        <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Loading time</div>
+        <div class="time-row"><span class="t-dot s"></span><span class="t-label">Started</span><span class="t-val">${fmt12(s.startTime)}</span></div>
+        <div class="time-row" style="margin-top:6px;"><span class="t-dot e"></span><span class="t-label">Finished</span><span class="t-val">${fmt12(s.endTime)}</span><span class="t-dur">${dur}</span></div>
+      </div>
+      <div class="metric-grid">
+        <div class="metric"><div class="metric-label">Total SKUs</div><div class="metric-val">${totals.length}</div></div>
+        <div class="metric"><div class="metric-label">Total units</div><div class="metric-val">${total}</div></div>
+        <div class="metric"><div class="metric-label">Rows used</div><div class="metric-val">${filled}/${s.rows}</div></div>
+      </div>
+    </div>`;
+  document.getElementById('totals-list').innerHTML=totals.length
+    ?totals.map(t=>`<div class="summary-row"><span style="font-size:14px;">${t.name}</span><span><span style="font-size:15px;font-weight:700;color:var(--blue);">${t.qty}</span><span style="font-size:12px;color:var(--text-secondary);margin-left:4px;">${t.unit}</span></span></div>`).join('')
+    :'<div style="font-size:13px;color:var(--text-secondary);">No entries recorded.</div>';
+  document.getElementById('rowwise-list').innerHTML=s.rowData.map(row=>{
+    if(!rowFilled(row))return '';
+    const lines=row.entries.filter(e=>e.skuId&&e.qty>0).map(e=>{const sk=skus.find(x=>x.id==e.skuId);return sk?`${sk.name}: <b>${e.qty}</b> ${sk.unit}`:''}).filter(Boolean).join(' | ');
+    return lines?`<div class="summary-row"><span style="font-size:13px;font-weight:600;white-space:nowrap;">Row ${row.row}</span><span style="font-size:13px;color:var(--text-secondary);text-align:right;flex:1;">${lines}</span></div>`:'';
+  }).join('');
+  document.getElementById('summary-actions').innerHTML=`
+    ${isAdmin()?'<button class="btn btn-primary" onclick="window.print()">Print summary</button>':''}
+    ${isAdmin()?`<button class="btn btn-success" onclick="doExport('${id}')">Export to CSV</button>`:''}
+    ${!isAdmin()?'<div class="restricted-banner">🔒 Export and print available to admins only</div>':''}
+    <button class="btn btn-secondary" onclick="backToLoading()">Continue loading</button>
+    <button class="btn btn-secondary" onclick="goTo('screen-home')">Back to home</button>`;
+}
+function doExport(id){
+  if(!isAdmin()){alert('Only admins can export.');return;}
+  const s=getSess(id||curSessId),skus=loadSKUs(),totals=calcTotals(s.rowData);
+  const dur=(s.startTime&&s.endTime)?fmtDur(new Date(s.endTime)-new Date(s.startTime)):'—';
+  let csv=`Truck Loading Summary\nTruck:,${s.truck}\nType:,${s.truckType==='large'?'Large':'Small'}\nDriver:,${s.driver}\nLoading Incharge:,${s.incharge||'-'}\nDestination:,${s.dest||'-'}\nDate:,${s.date}\nRows:,${s.rows}\nStarted:,${fmt12(s.startTime)}\nFinished:,${fmt12(s.endTime)}\nDuration:,${dur}\n\nSKU TOTALS\nSKU,Qty,Unit\n`;
+  totals.forEach(t=>{csv+=`${t.name},${t.qty},${t.unit}\n`;});
+  csv+='\nROW DETAILS\nRow,SKU,Qty,Unit\n';
+  s.rowData.forEach(r=>r.entries.forEach(e=>{const sk=skus.find(x=>x.id==e.skuId);if(sk)csv+=`Row ${r.row},${sk.name},${e.qty},${sk.unit}\n`;}));
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=`${s.truck}_${s.date}.csv`;a.click();
+}
+
+// Boot
+function boot(){
+  document.getElementById('ns-date').value=new Date().toISOString().split('T')[0];
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  initLogin();
+}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',boot);}else{boot();}
+
+// Global error catcher — shows any JS error on screen
+window.onerror = function(msg, src, line, col, err){
+  var d = document.getElementById('login-error');
+  if(d) d.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+  return false;
+};
+</script>
+
+
+</body>
+</html>
