@@ -606,11 +606,19 @@ function closeModal(){
   var mo=document.getElementById('confirm-modal');if(mo)mo.classList.remove('open');
   pendingModal=null;
 }
-// Attach modal confirm — deferred so DOM is ready
-window.addEventListener('DOMContentLoaded', function(){
+function confirmModalAction(){
+  var cb=pendingModal; // grab BEFORE closeModal nulls it
+  pendingModal=null;
+  var mo=document.getElementById('confirm-modal');if(mo)mo.classList.remove('open');
+  if(cb) cb();
+}
+// Attach modal confirm — retry until DOM ready
+function attachModalBtn(){
   var btn=document.getElementById('modal-confirm-btn');
-  if(btn) btn.onclick=function(){closeModal();if(pendingModal)pendingModal();};
-});
+  if(btn){btn.onclick=confirmModalAction;}
+  else{setTimeout(attachModalBtn,100);}
+}
+attachModalBtn();
 
 // Edit user modal
 function openEditUser(id){
@@ -724,16 +732,37 @@ function renderSKUs(){
 function addSKU(){
   const name=document.getElementById('new-sku-name').value.trim(),unit=document.getElementById('new-sku-unit').value.trim();
   if(!name){alert('Please enter a SKU name.');return;}
-  const skus=loadSKUs();skus.push({id:Date.now(),name,unit:unit||'unit'});saveSKUs(skus);
+  const skus=loadSKUs();
+  // Check for duplicate name (case-insensitive)
+  if(skus.find(function(s){return s.name.toLowerCase()===name.toLowerCase();})){
+    alert('A SKU with the name "'+name+'" already exists. Please use a different name.');return;
+  }
+  skus.push({id:Date.now(),name,unit:unit||'unit'});saveSKUs(skus);
   document.getElementById('new-sku-name').value='';document.getElementById('new-sku-unit').value='';renderSKUs();
 }
-function deleteSKU(id){showModal('Remove SKU','Remove this SKU from master list?',()=>{saveSKUs(loadSKUs().filter(s=>s.id!==id));renderSKUs();});}
+function deleteSKU(id){
+  showModal('Remove SKU','Remove this SKU from master list?',function(){
+    var updated=loadSKUs().filter(function(s){return s.id!==id;});
+    saveSKUs(updated);
+    renderSKUs();
+  });
+}
 
 // Sessions
 function getSess(id){return loadSessions().find(s=>s.id===id);}
 function saveSess(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id);if(i>=0)ss[i]=sess;else ss.push(sess);saveSessions(ss);}
 function persistLive(){const s=getSess(curSessId);s.rowData=clone(liveRows);saveSess(s);}
-function confirmDel(id,truck){showModal('Delete session',`Delete session for ${truck}? Cannot be undone.`,()=>{saveSessions(loadSessions().filter(s=>s.id!==id));renderHome();});}
+function confirmDel(id,truck){
+  showModal('Delete session','Delete session for '+truck+'? Cannot be undone.',function(){
+    // Remove from local
+    saveSessions(loadSessions().filter(function(s){return s.id!==id;}));
+    // Remove from Firebase if online
+    if(fbOK&&isOnline&&window._fb){
+      try{_db.collection("sessions").doc(id).delete();}catch(e){}
+    }
+    renderHome();
+  });
+}
 async function finaliseSession(){
   persistLive();const s=getSess(curSessId);s.done=true;s.endTime=new Date().toISOString();s.synced=false;
   saveSess(s);stopTimer();editRowIdx=-1;
