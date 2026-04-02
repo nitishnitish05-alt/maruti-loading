@@ -423,6 +423,7 @@ try {
   const _db = firebase.firestore();
   window._fb = {
     async saveSession(s){try{await _db.collection("sessions").doc(s.id).set(s);return true;}catch(e){return false;}},
+    async deleteSession(id){try{await _db.collection("sessions").doc(id).delete();return true;}catch(e){return false;}},
     async loadSessions(){try{const sn=await _db.collection("sessions").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
     async saveUsers(u){try{await _db.collection("config").doc("users").set({list:u});return true;}catch(e){return false;}},
     async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
@@ -483,6 +484,10 @@ async function syncQueue(){
   else setSyncBar('online','Connected — all data synced');
 }
 
+// Track deleted session IDs locally so they don't reappear from cloud
+function getDeleted(){try{return JSON.parse(localStorage.getItem('tl_deleted_m1'))||[];}catch(e){return[];}}
+function addDeleted(id){var d=getDeleted();if(d.indexOf(id)<0){d.push(id);localStorage.setItem('tl_deleted_m1',JSON.stringify(d));}}
+
 async function pullCloud(){
   if(!fbOK||!isOnline)return;
   try{
@@ -490,9 +495,15 @@ async function pullCloud(){
     const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
     const csess=await window._fb.loadSessions();
     if(csess&&csess.length){
-      const loc=loadSessions();const m={};
-      loc.forEach(s=>m[s.id]=s);
-      csess.forEach(s=>{if(!m[s.id])m[s.id]=s;else if(s.done)m[s.id]=s;});
+      const loc=loadSessions();
+      const deleted=getDeleted(); // never re-add deleted sessions
+      const m={};
+      loc.forEach(function(s){m[s.id]=s;});
+      csess.forEach(function(s){
+        if(deleted.indexOf(s.id)>=0) return; // skip deleted
+        if(!m[s.id])m[s.id]=s;
+        else if(s.done)m[s.id]=s;
+      });
       SS(K.SESSIONS,Object.values(m));
     }
   }catch(e){}
@@ -501,10 +512,16 @@ async function pullCloud(){
 function startCloudListener(){
   if(!fbOK||!isOnline||!CU||CU.role!=='admin')return;
   if(fbListener){fbListener();fbListener=null;}
-  fbListener=window._fb.listenDone(doneSessions=>{
+  fbListener=window._fb.listenDone(function(doneSessions){
     if(!doneSessions.length)return;
+    const deleted=getDeleted();
     const loc=loadSessions();let changed=false;
-    doneSessions.forEach(cs=>{const i=loc.findIndex(s=>s.id===cs.id);if(i<0){loc.push(cs);changed=true;}else if(!loc[i].done){loc[i]=cs;changed=true;}});
+    doneSessions.forEach(function(cs){
+      if(deleted.indexOf(cs.id)>=0) return; // skip deleted
+      const i=loc.findIndex(function(s){return s.id===cs.id;});
+      if(i<0){loc.push(cs);changed=true;}
+      else if(!loc[i].done){loc[i]=cs;changed=true;}
+    });
     if(changed){SS(K.SESSIONS,loc);if(homeFilter==='done')renderHome();}
   });
 }
@@ -754,13 +771,13 @@ function saveSess(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id
 function persistLive(){const s=getSess(curSessId);s.rowData=clone(liveRows);saveSess(s);}
 function confirmDel(id,truck){
   showModal('Delete session','Delete session for '+truck+'? Cannot be undone.',function(){
-    // Remove from local
+    addDeleted(id); // mark as deleted so it never reappears from cloud
     saveSessions(loadSessions().filter(function(s){return s.id!==id;}));
-    // Remove from Firebase if online
-    if(fbOK&&isOnline&&window._fb){
-      try{_db.collection("sessions").doc(id).delete();}catch(e){}
-    }
     renderHome();
+    // Delete from Firebase cloud
+    if(fbOK&&isOnline&&window._fb){
+      window._fb.deleteSession(id).catch(function(e){console.warn('Firebase delete failed:',e);});
+    }
   });
 }
 async function finaliseSession(){
