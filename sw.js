@@ -1,6 +1,6 @@
 importScripts('https://storage.googleapis.com/workbox-cdn/releases/5.1.2/workbox-sw.js');
-const CACHE="maruti-v3";
-const OLD_CACHES=["maruti-v1","maruti-v2"];
+const CACHE="maruti-v4";
+const OLD_CACHES=["maruti-v1","maruti-v2","maruti-v3"];
 self.addEventListener("message",(e)=>{if(e.data&&e.data.type==="SKIP_WAITING")self.skipWaiting();});
 self.addEventListener('install',async(e)=>{
   e.waitUntil(caches.open(CACHE).then(c=>c.add('index.html')));
