@@ -767,7 +767,15 @@ function renderHome(){
     if(ta)ta.style.display='';
     if(td)td.style.opacity=isAdmin()?'1':'0.4';
   }
-  const sessions=loadSessions().filter(s=>homeFilter==='active'?!s.done:s.done);
+  const allSessions=loadSessions();
+  // Admin/accounts see all sessions, users only see their own
+  const filtered=allSessions.filter(function(s){
+    if(isAdmin()||isAccounts()) return true;
+    // If createdBy is missing, show to everyone (legacy sessions)
+    if(!s.createdBy) return true;
+    return s.createdBy===CU.username;
+  });
+  const sessions=filtered.filter(s=>homeFilter==='active'?!s.done:s.done);
   const el=document.getElementById('sessions-list');
   if(!sessions.length){el.innerHTML=`<div class="empty-state">${homeFilter==='active'?'No active sessions.':'No completed sessions.'}</div>`;return;}
   el.innerHTML=sessions.slice().reverse().map(s=>`
