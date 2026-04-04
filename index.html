@@ -371,6 +371,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div id="rows-container"></div>
   <div class="no-print" style="margin-top:8px;">
     <button class="btn btn-success" onclick="finaliseSession()">Finalise &amp; view totals</button>
+    <button class="btn btn-secondary" onclick="goTo('screen-home')">Back to home</button>
   </div>
 </div>
 
@@ -438,7 +439,7 @@ try {
     async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
     async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{});}  ,
+    listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{}); },
     listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{});}
   };
   window._fbOK = true;
@@ -687,7 +688,9 @@ function saveEditUser(){
 
 // Routing
 function goTo(s){
-  stopTimer();stopAutoSave();
+  stopTimer();
+  // Only stop auto-save when leaving loading screen
+  if(s!=='screen-loading') stopAutoSave();
   var cm=document.getElementById('confirm-modal');if(cm)cm.classList.remove('open');
   var em=document.getElementById('edit-user-modal');if(em)em.classList.remove('open');
   document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
@@ -1036,13 +1039,19 @@ function saveEditRow(ri){
   liveRows[ri].entries=v;persistLive();editRowSnap=null;editRowIdx=-1;renderLoading(curSessId);
 }
 async function finaliseSession(){
-  persistLive();const s=getSess(curSessId);s.done=true;s.endTime=new Date().toISOString();s.synced=false;
+  // Make sure latest row data is saved first
+  try{ persistLive(); }catch(e){}
+  const s=getSess(curSessId);
+  if(!s){alert('Session not found. Please go back and try again.');return;}
+  s.done=true;s.endTime=new Date().toISOString();s.synced=false;
   saveSess(s);stopTimer();stopAutoSave();editRowIdx=-1;
   setSyncBar('syncing','Uploading completed session to cloud...');
-  if(fbOK&&isOnline){
-    const ok=await window._fb.saveSession({...s,synced:true});
-    if(ok){s.synced=true;saveSess(s);setSyncBar('online','✅ Uploaded — admin can now view the report');}
-    else{addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
+  if(fbOK&&isOnline&&window._fb){
+    try{
+      const ok=await window._fb.saveSession(Object.assign({},s,{synced:true}));
+      if(ok){s.synced=true;saveSess(s);setSyncBar('online','✅ Uploaded — admin can now view the report');}
+      else{addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
+    }catch(e){addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
   }else{addPQ('session',s.id);setSyncBar('offline','📱 Saved locally — will upload when back online');}
   renderSummary(curSessId);goTo('screen-summary');
 }
