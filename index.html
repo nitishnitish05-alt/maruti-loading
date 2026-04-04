@@ -438,7 +438,8 @@ try {
     async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
     async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{});}
+    listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{});}  ,
+    listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{});}
   };
   window._fbOK = true;
   window.dispatchEvent(new Event('fbReady'));
@@ -521,17 +522,30 @@ async function pullCloud(){
 function startCloudListener(){
   if(!fbOK||!isOnline||!CU||CU.role!=='admin')return;
   if(fbListener){fbListener();fbListener=null;}
-  fbListener=window._fb.listenDone(function(doneSessions){
-    if(!doneSessions.length)return;
+  // Admin listens to ALL sessions (active + completed) in real time
+  fbListener=window._fb.listenAll(function(allSessions){
+    if(!allSessions.length)return;
     const deleted=getDeleted();
     const loc=loadSessions();let changed=false;
-    doneSessions.forEach(function(cs){
-      if(deleted.indexOf(cs.id)>=0) return; // skip deleted
+    allSessions.forEach(function(cs){
+      if(deleted.indexOf(cs.id)>=0) return;
       const i=loc.findIndex(function(s){return s.id===cs.id;});
       if(i<0){loc.push(cs);changed=true;}
-      else if(!loc[i].done){loc[i]=cs;changed=true;}
+      else{
+        // Cloud wins for completed sessions
+        // For active sessions — only update if cloud version is newer
+        if(cs.done && !loc[i].done){loc[i]=cs;changed=true;}
+        else if(!cs.done && !loc[i].done){
+          // Both active — take cloud version to show latest progress
+          loc[i]=cs;changed=true;
+        }
+        else if(cs.done && loc[i].done){loc[i]=cs;changed=true;}
+      }
     });
-    if(changed){SS(K.SESSIONS,loc);if(homeFilter==='done')renderHome();}
+    if(changed){
+      SS(K.SESSIONS,loc);
+      renderHome(); // always refresh home for admin to see live updates
+    }
   });
 }
 
@@ -673,7 +687,7 @@ function saveEditUser(){
 
 // Routing
 function goTo(s){
-  stopTimer();
+  stopTimer();stopAutoSave();
   var cm=document.getElementById('confirm-modal');if(cm)cm.classList.remove('open');
   var em=document.getElementById('edit-user-modal');if(em)em.classList.remove('open');
   document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
@@ -777,7 +791,24 @@ function deleteSKU(id){
 // Sessions
 function getSess(id){return loadSessions().find(s=>s.id===id);}
 function saveSess(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id);if(i>=0)ss[i]=sess;else ss.push(sess);saveSessions(ss);}
-function persistLive(){const s=getSess(curSessId);s.rowData=clone(liveRows);saveSess(s);}
+function persistLive(){const s=getSess(curSessId);if(!s)return;s.rowData=clone(liveRows);saveSess(s);}
+
+// Push active session progress to Firebase (for admin visibility + offline safety)
+function cloudSaveProgress(){
+  if(!fbOK||!isOnline||!window._fb)return;
+  const s=getSess(curSessId);if(!s||s.done)return;
+  window._fb.saveSession(s).catch(function(){});
+}
+
+// Auto-save every 2 minutes during active loading
+let autoSaveTimer=null;
+function startAutoSave(){
+  stopAutoSave();
+  autoSaveTimer=setInterval(function(){
+    if(curSessId){persistLive();cloudSaveProgress();}
+  },120000); // 2 minutes
+}
+function stopAutoSave(){if(autoSaveTimer){clearInterval(autoSaveTimer);autoSaveTimer=null;}}
 function confirmDel(id,truck){
   showModal('Delete session','Delete session for '+truck+'? Cannot be undone.',function(){
     addDeleted(id); // mark as deleted so it never reappears from cloud
@@ -827,13 +858,18 @@ function createSession(){
   const incharge=document.getElementById('ns-incharge').value.trim(),dest=document.getElementById('ns-dest').value.trim(),rows=parseInt(document.getElementById('ns-rows').value)||10;
   if(!truck||!driver){alert('Please fill truck number and driver name.');return;}
   const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
-  const ss=loadSessions();ss.push({id,date,truck,driver,incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username});
-  saveSessions(ss);curSessId=id;editRowIdx=-1;liveRows=clone(rowData);renderLoading(id);goTo('screen-loading');
+  const newSess={id,date,truck,driver,incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
+  const ss=loadSessions();ss.push(newSess);saveSessions(ss);
+  // Push to Firebase immediately so admin can see active session
+  if(fbOK&&isOnline&&window._fb){
+    window._fb.saveSession(newSess).catch(function(){addPQ('session',id);});
+  } else { addPQ('session',id); }
+  curSessId=id;editRowIdx=-1;liveRows=clone(rowData);renderLoading(id);goTo('screen-loading');startAutoSave();
 }
 function openSession(id){
   curSessId=id;editRowIdx=-1;const s=getSess(id);
   if(s.done){if(!isAdmin()){alert('Only admins can view completed reports.');return;}liveRows=clone(s.rowData);renderSummary(id);goTo('screen-summary');}
-  else{liveRows=clone(s.rowData);renderLoading(id);goTo('screen-loading');}
+  else{liveRows=clone(s.rowData);renderLoading(id);goTo('screen-loading');startAutoSave();}
 }
 
 // Time
@@ -986,7 +1022,10 @@ function refreshEntries(ri){
 function confirmRow(ri){
   flushDOM(ri);const v=liveRows[ri].entries.filter(e=>e.skuId&&parseFloat(e.qty)>0);
   if(!v.length){alert(`Add at least one SKU with quantity to Row ${ri+1}.`);return;}
-  liveRows[ri].entries=v;persistLive();editRowIdx=-1;renderLoading(curSessId);
+  liveRows[ri].entries=v;persistLive();editRowIdx=-1;
+  // Push progress to Firebase so admin sees live progress and data is safe
+  cloudSaveProgress();
+  renderLoading(curSessId);
   setTimeout(()=>{const a=document.querySelector('.row-card.state-active');if(a)a.scrollIntoView({behavior:'smooth',block:'start'});},100);
 }
 function startEditRow(ri){editRowSnap=clone(liveRows[ri].entries);editRowIdx=ri;renderLoading(curSessId);setTimeout(()=>{const c=document.querySelector('.row-card.state-editing');if(c)c.scrollIntoView({behavior:'smooth',block:'start'});},80);}
@@ -998,7 +1037,7 @@ function saveEditRow(ri){
 }
 async function finaliseSession(){
   persistLive();const s=getSess(curSessId);s.done=true;s.endTime=new Date().toISOString();s.synced=false;
-  saveSess(s);stopTimer();editRowIdx=-1;
+  saveSess(s);stopTimer();stopAutoSave();editRowIdx=-1;
   setSyncBar('syncing','Uploading completed session to cloud...');
   if(fbOK&&isOnline){
     const ok=await window._fb.saveSession({...s,synced:true});
@@ -1009,7 +1048,7 @@ async function finaliseSession(){
 }
 function backToLoading(){
   const s=getSess(curSessId);s.done=false;s.endTime=null;saveSess(s);
-  editRowIdx=-1;liveRows=clone(s.rowData);renderLoading(curSessId);goTo('screen-loading');
+  editRowIdx=-1;liveRows=clone(s.rowData);renderLoading(curSessId);goTo('screen-loading');startAutoSave();
 }
 
 // Summary
