@@ -74,6 +74,8 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 .role-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 .role-dot.admin { background: var(--blue); }
 .role-dot.user { background: var(--green); }
+.role-dot.accounts { background: var(--purple-dark); }
+.badge-accounts-r { background: var(--purple-light); color: var(--purple-dark); }
 
 /* Tabs */
 .tab-bar { display: flex; gap: 4px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 4px; margin-bottom: 16px; }
@@ -262,11 +264,11 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div id="sync-bar"></div>
   <div id="admin-bar"></div>
   <div class="tab-bar">
-    <button class="tab active" onclick="homeTab('active',this)">Active</button>
+    <button class="tab active" id="tab-active" onclick="homeTab('active',this)">Active</button>
     <button class="tab" id="tab-done" onclick="homeTab('done',this)">Completed</button>
   </div>
   <div id="sessions-list"></div>
-  <button class="btn btn-primary" onclick="goTo('screen-new-session')">+ Start new loading session</button>
+  <button class="btn btn-primary" id="new-session-btn" onclick="goTo('screen-new-session')">+ Start new loading session</button>
 </div>
 
 <!-- ADMIN PANEL -->
@@ -293,7 +295,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;">Add new user</div>
       <div class="inline-row" style="margin-bottom:0;">
         <div><div class="field-label">Username</div><input type="text" id="new-user-name" placeholder="e.g. raju" autocomplete="off" style="margin-bottom:0;"></div>
-        <div><div class="field-label">Role</div><select id="new-user-role" style="margin-bottom:0;"><option value="user">User</option><option value="admin">Admin</option></select></div>
+        <div><div class="field-label">Role</div><select id="new-user-role" style="margin-bottom:0;"><option value="user">User</option><option value="accounts">Accounts</option><option value="admin">Admin</option></select></div>
       </div>
       <div style="margin-top:10px;"><div class="field-label">4-digit PIN</div>
         <div class="pin-display" id="nu-pin-display"></div>
@@ -521,7 +523,8 @@ async function pullCloud(){
 }
 
 function startCloudListener(){
-  if(!fbOK||!isOnline||!CU||CU.role!=='admin')return;
+  if(!fbOK||!isOnline||!CU)return;
+  if(CU.role!=='admin'&&CU.role!=='accounts')return;
   if(fbListener){fbListener();fbListener=null;}
   // Admin listens to ALL sessions (active + completed) in real time
   fbListener=window._fb.listenAll(function(allSessions){
@@ -563,6 +566,9 @@ function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
 function loadSessions(){return LS(K.SESSIONS)||[];}
 function saveSessions(s){SS(K.SESSIONS,s);}
 function isAdmin(){return CU&&CU.role==='admin';}
+function isAccounts(){return CU&&CU.role==='accounts';}
+function canViewCompleted(){return isAdmin()||isAccounts();}
+function canPrintExport(){return isAdmin()||isAccounts();}
 function clone(o){return JSON.parse(JSON.stringify(o));}
 
 // PIN
@@ -697,25 +703,70 @@ function goTo(s){
   var target=document.getElementById(s);
   if(!target){console.warn('Screen not found:',s);return;}
   target.classList.add('active');
+  // Push history state so Android back button works within app
+  window.history.pushState({screen:s}, '', '');
   if(s==='screen-home')renderHome();
   if(s==='screen-admin'){renderAdminUsers();renderSKUs();}
   if(s==='screen-login')initLogin();
 }
 
+// Handle Android back button — navigate within app instead of exiting
+window.addEventListener('popstate', function(e){
+  var currentScreen = document.querySelector('.screen.active');
+  if(!currentScreen) return;
+  var id = currentScreen.id;
+  // Define where each screen should go back to
+  var backMap = {
+    'screen-home':      null, // at home — do nothing (don't exit)
+    'screen-admin':     'screen-home',
+    'screen-new-session':'screen-home',
+    'screen-edit-session':'screen-home',
+    'screen-loading':   'screen-home',
+    'screen-summary':   'screen-loading'
+  };
+  var dest = backMap[id];
+  if(dest){
+    // Navigate to previous screen
+    document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
+    var target=document.getElementById(dest);
+    if(target) target.classList.add('active');
+    window.history.pushState({screen:dest},'','');
+    if(dest==='screen-home'){stopTimer();stopAutoSave();renderHome();}
+    if(dest==='screen-loading'){renderLoading(curSessId);startAutoSave();}
+  } else {
+    // Already at home — push state again to prevent exit
+    window.history.pushState({screen:id},'','');
+  }
+});
+
 // Home
 function homeTab(f,btn){
-  if(f==='done'&&!isAdmin()){alert('Only admins can view completed sessions.');return;}
+  if(f==='done'&&!canViewCompleted()){alert('Only admins and accounts can view completed sessions.');return;}
+  if(f==='active'&&isAccounts()){alert('Accounts role can only view completed sessions.');return;}
   homeFilter=f; document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); renderHome();
 }
 function renderHome(){
   document.getElementById('topbar-name').textContent=CU?CU.username:'';
-  const dot=document.getElementById('topbar-dot');if(dot)dot.className='role-dot '+(isAdmin()?'admin':'user');
+  const dot=document.getElementById('topbar-dot');
+  if(dot)dot.className='role-dot '+(isAdmin()?'admin':isAccounts()?'accounts':'user');
   const pend=getPQ().length;
   if(isOnline&&fbOK&&!pend)setSyncBar('online','Connected — all data synced across devices');
   else if(isOnline&&fbOK&&pend)setSyncBar('syncing',`Syncing ${pend} item(s)...`);
   else setSyncBar('offline','Offline — changes will sync when connected');
+  // Admin panel button — admin only
   document.getElementById('admin-bar').innerHTML=isAdmin()?`<button class="btn btn-warn no-print" style="margin-bottom:12px;" onclick="goTo('screen-admin')">&#9881; Admin panel</button>`:'';
-  const td=document.getElementById('tab-done');if(td)td.style.opacity=isAdmin()?'1':'0.4';
+  // Tabs — accounts sees only Completed, user sees only Active, admin sees both
+  const td=document.getElementById('tab-done');
+  const ta=document.getElementById('tab-active');
+  if(isAccounts()){
+    // Accounts — default to completed tab, hide active
+    if(ta)ta.style.display='none';
+    if(td)td.style.opacity='1';
+    if(homeFilter==='active') homeFilter='done';
+  } else {
+    if(ta)ta.style.display='';
+    if(td)td.style.opacity=isAdmin()?'1':'0.4';
+  }
   const sessions=loadSessions().filter(s=>homeFilter==='active'?!s.done:s.done);
   const el=document.getElementById('sessions-list');
   if(!sessions.length){el.innerHTML=`<div class="empty-state">${homeFilter==='active'?'No active sessions.':'No completed sessions.'}</div>`;return;}
@@ -733,6 +784,9 @@ function renderHome(){
         ${isAdmin()?`<button class="icon-btn del" onclick="confirmDel('${s.id}','${s.truck}')">🗑️</button>`:''}
       </div>
     </div>`).join('');
+  // Accounts — no new session button
+  const newBtn=document.getElementById('new-session-btn');
+  if(newBtn)newBtn.style.display=isAccounts()?'none':'';
 }
 
 // Admin
@@ -749,7 +803,7 @@ function renderAdminUsers(){
   const el=document.getElementById('users-list');
   el.innerHTML=others.length?others.map(u=>`
     <div class="user-row">
-      <div><div style="font-size:14px;font-weight:600;">${u.username}</div><span class="badge ${u.role==='admin'?'badge-admin-r':'badge-user-r'}">${u.role}</span></div>
+      <div><div style="font-size:14px;font-weight:600;">${u.username}</div><span class="badge ${u.role==='admin'?'badge-admin-r':u.role==='accounts'?'badge-accounts-r':'badge-user-r'}">${u.role}</span></div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-sm btn-secondary" onclick="openEditUser('${u.id}')">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Remove</button>
@@ -871,8 +925,13 @@ function createSession(){
 }
 function openSession(id){
   curSessId=id;editRowIdx=-1;const s=getSess(id);
-  if(s.done){if(!isAdmin()){alert('Only admins can view completed reports.');return;}liveRows=clone(s.rowData);renderSummary(id);goTo('screen-summary');}
-  else{liveRows=clone(s.rowData);renderLoading(id);goTo('screen-loading');startAutoSave();}
+  if(s.done){
+    if(!canViewCompleted()){alert('Only admins and accounts can view completed reports.');return;}
+    liveRows=clone(s.rowData);renderSummary(id);goTo('screen-summary');
+  } else {
+    if(isAccounts()){alert('Accounts role cannot access active loading sessions.');return;}
+    liveRows=clone(s.rowData);renderLoading(id);goTo('screen-loading');startAutoSave();
+  }
 }
 
 // Time
@@ -1096,14 +1155,14 @@ function renderSummary(id){
     return lines?`<div class="summary-row"><span style="font-size:13px;font-weight:600;white-space:nowrap;">Row ${row.row}</span><span style="font-size:13px;color:var(--text-secondary);text-align:right;flex:1;">${lines}</span></div>`:'';
   }).join('');
   document.getElementById('summary-actions').innerHTML=`
-    ${isAdmin()?'<button class="btn btn-primary" onclick="window.print()">Print summary</button>':''}
-    ${isAdmin()?`<button class="btn btn-success" onclick="doExport('${id}')">Export to CSV</button>`:''}
-    ${!isAdmin()?'<div class="restricted-banner">🔒 Export and print available to admins only</div>':''}
-    <button class="btn btn-secondary" onclick="backToLoading()">Continue loading</button>
+    ${canPrintExport()?'<button class="btn btn-primary" onclick="window.print()">Print summary</button>':''}
+    ${canPrintExport()?`<button class="btn btn-success" onclick="doExport('${id}')">Export to CSV</button>`:''}
+    ${!canPrintExport()?'<div class="restricted-banner">🔒 Export and print available to admins and accounts only</div>':''}
+    ${!isAccounts()?'<button class="btn btn-secondary" onclick="backToLoading()">Continue loading</button>':''}
     <button class="btn btn-secondary" onclick="goTo('screen-home')">Back to home</button>`;
 }
 function doExport(id){
-  if(!isAdmin()){alert('Only admins can export.');return;}
+  if(!canPrintExport()){alert('Only admins and accounts can export.');return;}
   const s=getSess(id||curSessId),skus=loadSKUs(),totals=calcTotals(s.rowData);
   const dur=(s.startTime&&s.endTime)?fmtDur(new Date(s.endTime)-new Date(s.startTime)):'—';
   let csv=`Truck Loading Summary\nTruck:,${s.truck}\nType:,${s.truckType==='large'?'Large':'Small'}\nDriver:,${s.driver}\nLoading Incharge:,${s.incharge||'-'}\nDestination:,${s.dest||'-'}\nDate:,${s.date}\nRows:,${s.rows}\nStarted:,${fmt12(s.startTime)}\nFinished:,${fmt12(s.endTime)}\nDuration:,${dur}\n\nSKU TOTALS\nSKU,Qty,Unit\n`;
@@ -1117,6 +1176,8 @@ function doExport(id){
 function boot(){
   document.getElementById('ns-date').value=new Date().toISOString().split('T')[0];
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  // Push initial history state so Android back button is intercepted from the start
+  window.history.pushState({screen:'screen-login'},'','');
   initLogin();
 }
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',boot);}else{boot();}
