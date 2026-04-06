@@ -1218,7 +1218,7 @@ function renderSummary(id){
     return lines?`<div class="summary-row"><span style="font-size:13px;font-weight:600;white-space:nowrap;">Row ${row.row}</span><span style="font-size:13px;color:var(--text-secondary);text-align:right;flex:1;">${lines}</span></div>`:'';
   }).join('');
   var actHTML='';
-  if(canPrintExport()) actHTML+='<button class="btn btn-primary" onclick="window.print()">🖨️ Print full summary</button>';
+  if(canPrintExport()) actHTML+='<button class="btn btn-primary" onclick="printFullSummary(\''+id+'\')">🖨️ Print full summary</button>';
   if(isAccounts()||isAdmin()) actHTML+='<button class="btn btn-primary no-print" style="background:var(--blue);" onclick="printRowSlips(\''+id+'\')">📄 Print row-wise slips</button>';
   if(canPrintExport()) actHTML+='<button class="btn btn-success" onclick="doExport(\''+id+'\')">Export to CSV</button>';
   if(!canPrintExport()) actHTML+='<div class="restricted-banner">🔒 Export and print available to admins and accounts only</div>';
@@ -1226,6 +1226,83 @@ function renderSummary(id){
   actHTML+='<button class="btn btn-secondary" onclick="goTo(\'screen-home\')">Back to home</button>';
   document.getElementById('summary-actions').innerHTML=actHTML;
 }
+function printFullSummary(id){
+  const s=getSess(id||curSessId);
+  const skus=loadSKUs();
+  const totals=calcTotals(s.rowData);
+  const total=totals.reduce(function(a,b){return a+b.qty;},0);
+  const filled=s.rowData.filter(function(r){return rowFilled(r);}).length;
+  const dur=(s.startTime&&s.endTime)?fmtDur(new Date(s.endTime)-new Date(s.startTime)):'—';
+
+  // SKU totals rows
+  const totalsHTML=totals.map(function(t){
+    return '<tr style="border-bottom:1px solid #eee;">'+
+      '<td style="padding:7px 10px;font-size:13px;">'+t.name+'</td>'+
+      '<td style="padding:7px 10px;font-size:13px;text-align:center;font-weight:700;color:#185FA5;">'+t.qty+'</td>'+
+      '<td style="padding:7px 10px;font-size:13px;color:#555;">'+t.unit+'</td>'+
+    '</tr>';
+  }).join('');
+
+  // Row-wise breakdown
+  const rowsHTML=s.rowData.filter(function(row){return rowFilled(row);}).map(function(row){
+    const items=row.entries.filter(function(e){return e.skuId&&parseFloat(e.qty)>0;});
+    const itemRows=items.map(function(e){
+      const sk=skus.find(function(x){return x.id==e.skuId;});
+      if(!sk)return '';
+      return '<tr style="border-bottom:1px solid #eee;">'+
+        '<td style="padding:7px 10px;font-size:13px;">'+sk.name+'</td>'+
+        '<td style="padding:7px 10px;font-size:13px;text-align:center;font-weight:700;color:#185FA5;">'+e.qty+'</td>'+
+        '<td style="padding:7px 10px;font-size:13px;color:#555;">'+sk.unit+'</td>'+
+      '</tr>';
+    }).join('');
+    return '<tr style="background:#e8f0e8;"><td colspan="3" style="padding:8px 10px;font-size:13px;font-weight:700;border-top:2px solid #185FA5;color:#1a4731;">Row '+row.row+'</td></tr>'+itemRows;
+  }).join('');
+
+  const printHTML='<html><head><meta charset="UTF-8"><style>'+
+    'body{font-family:Arial,sans-serif;padding:20px;margin:0;}'+
+    'h2{font-size:18px;margin:0 0 4px;}'+
+    '.info{font-size:12px;color:#555;margin-bottom:3px;}'+
+    '.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}'+
+    '.metric{background:#f5f5f0;border-radius:6px;padding:10px;text-align:center;}'+
+    '.metric-label{font-size:11px;color:#888;margin-bottom:4px;}'+
+    '.metric-val{font-size:20px;font-weight:700;}'+
+    '.section-title{font-size:13px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;}'+
+    'table{width:100%;border-collapse:collapse;}'+
+    'th{background:#185FA5;color:white;padding:8px 10px;text-align:left;font-size:13px;}'+
+    '.footer{margin-top:16px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:8px;}'+
+    '</style></head><body>'+
+    '<h2>MARUTI LOADING — Full Summary</h2>'+
+    '<div class="info"><b>Truck:</b> '+s.truck+' ('+( s.truckType==='large'?'Large':'Small')+') &nbsp;|&nbsp; <b>Date:</b> '+s.date+'</div>'+
+    '<div class="info"><b>Driver:</b> '+(s.driver||'—')+' &nbsp;|&nbsp; <b>IC:</b> '+(s.incharge||'—')+'</div>'+
+    (s.dest?'<div class="info"><b>Destination:</b> → '+s.dest+'</div>':'')+
+    '<div class="info"><b>Started:</b> '+fmt12(s.startTime)+' &nbsp;|&nbsp; <b>Finished:</b> '+fmt12(s.endTime)+' &nbsp;|&nbsp; <b>Duration:</b> '+dur+'</div>'+
+    '<div class="metrics">'+
+      '<div class="metric"><div class="metric-label">Total SKUs</div><div class="metric-val">'+totals.length+'</div></div>'+
+      '<div class="metric"><div class="metric-label">Total Units</div><div class="metric-val">'+total+'</div></div>'+
+      '<div class="metric"><div class="metric-label">Rows Used</div><div class="metric-val">'+filled+'/'+s.rows+'</div></div>'+
+    '</div>'+
+    '<div class="section-title">SKU Totals</div>'+
+    '<table><thead><tr><th>SKU / Item</th><th style="text-align:center;width:60px;">Qty</th><th style="width:60px;">Unit</th></tr></thead>'+
+    '<tbody>'+totalsHTML+'</tbody></table>'+
+    '<div class="section-title">Row-wise Breakdown</div>'+
+    '<table><thead><tr><th>SKU / Item</th><th style="text-align:center;width:60px;">Qty</th><th style="width:60px;">Unit</th></tr></thead>'+
+    '<tbody>'+rowsHTML+'</tbody></table>'+
+    '<div class="footer">Printed: '+new Date().toLocaleString()+'</div>'+
+    '</body></html>';
+
+  var iframe=document.getElementById('print-iframe');
+  if(!iframe){
+    iframe=document.createElement('iframe');
+    iframe.id='print-iframe';
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(printHTML);
+  iframe.contentDocument.close();
+  iframe.onload=function(){iframe.contentWindow.focus();iframe.contentWindow.print();};
+}
+
 function printRowSlips(id){
   const s=getSess(id||curSessId);
   const skus=loadSKUs();
@@ -1234,40 +1311,56 @@ function printRowSlips(id){
 
   const rowsHTML=filledRows.map(function(row){
     const items=row.entries.filter(function(e){return e.skuId&&parseFloat(e.qty)>0;});
-    const itemText=items.map(function(e){
+    const itemRows=items.map(function(e){
       const sk=skus.find(function(x){return x.id==e.skuId;});
-      return sk?'<td style="padding:7px 10px;font-size:13px;">'+sk.name+'</td><td style="padding:7px 10px;font-size:13px;text-align:center;font-weight:700;color:#185FA5;">'+e.qty+'</td><td style="padding:7px 10px;font-size:13px;color:#555;">'+sk.unit+'</td>':'';
-    }).filter(Boolean);
-    return '<tr style="background:#f0f4f0;"><td colspan="3" style="padding:8px 10px;font-size:13px;font-weight:700;border-top:1.5px solid #185FA5;">Row '+row.row+'</td></tr>'+
-      itemText.map(function(td){return '<tr style="border-bottom:1px solid #eee;">'+td+'</tr>';}).join('');
+      if(!sk)return '';
+      return '<tr style="border-bottom:1px solid #eee;">'+
+        '<td style="padding:7px 10px;font-size:13px;">'+sk.name+'</td>'+
+        '<td style="padding:7px 10px;font-size:13px;text-align:center;font-weight:700;color:#185FA5;">'+e.qty+'</td>'+
+        '<td style="padding:7px 10px;font-size:13px;color:#555;">'+sk.unit+'</td>'+
+      '</tr>';
+    }).join('');
+    return '<tr style="background:#e8f0e8;"><td colspan="3" style="padding:8px 10px;font-size:13px;font-weight:700;border-top:2px solid #185FA5;color:#1a4731;">Row '+row.row+'</td></tr>'+itemRows;
   }).join('');
 
-  const printHTML='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
-    '<title>Row-wise Loading Details — '+s.truck+'</title>'+
-    '<style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;}'+
-    'h2{font-size:18px;margin-bottom:2px;}'+
-    '.info{font-size:12px;color:#555;margin-bottom:4px;}'+
-    'table{width:100%;border-collapse:collapse;margin-top:16px;}'+
+  const printHTML='<html><head><meta charset="UTF-8"><style>'+
+    'body{font-family:Arial,sans-serif;padding:20px;margin:0;}'+
+    'h2{font-size:17px;margin:0 0 4px;}'+
+    '.info{font-size:12px;color:#555;margin-bottom:3px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:14px;}'+
     'th{background:#185FA5;color:white;padding:8px 10px;text-align:left;font-size:13px;}'+
-    'tr:nth-child(even){background:#f9f9f9;}'+
-    '.footer{margin-top:16px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:8px;}'+
+    '.footer{margin-top:12px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:6px;}'+
     '</style></head><body>'+
     '<h2>MARUTI LOADING — Row-wise Details</h2>'+
     '<div class="info"><b>Truck:</b> '+s.truck+' &nbsp;|&nbsp; <b>Date:</b> '+s.date+'</div>'+
     '<div class="info"><b>Driver:</b> '+(s.driver||'—')+' &nbsp;|&nbsp; <b>IC:</b> '+(s.incharge||'—')+'</div>'+
     (s.dest?'<div class="info"><b>Destination:</b> → '+s.dest+'</div>':'')+
     '<table>'+
-      '<thead><tr><th>SKU / Item</th><th style="text-align:center;">Qty</th><th>Unit</th></tr></thead>'+
+      '<thead><tr>'+
+        '<th>SKU / Item</th>'+
+        '<th style="text-align:center;width:60px;">Qty</th>'+
+        '<th style="width:60px;">Unit</th>'+
+      '</tr></thead>'+
       '<tbody>'+rowsHTML+'</tbody>'+
     '</table>'+
-    '<div class="footer">Printed: '+new Date().toLocaleString()+' &nbsp;|&nbsp; Total loaded rows: '+filledRows.length+'</div>'+
+    '<div class="footer">Printed: '+new Date().toLocaleString()+' &nbsp;|&nbsp; Loaded rows: '+filledRows.length+'</div>'+
     '</body></html>';
 
-  const win=window.open('','_blank','width=650,height=800');
-  win.document.write(printHTML);
-  win.document.close();
-  win.focus();
-  win.print();
+  // Use hidden iframe for printing — works in both browser and Android WebView
+  var iframe=document.getElementById('print-iframe');
+  if(!iframe){
+    iframe=document.createElement('iframe');
+    iframe.id='print-iframe';
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(printHTML);
+  iframe.contentDocument.close();
+  iframe.onload=function(){
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  };
 }
 function doExport(id){
   if(!canPrintExport()){alert('Only admins and accounts can export.');return;}
