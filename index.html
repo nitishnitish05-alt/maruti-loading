@@ -179,7 +179,13 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 @media print {
   .no-print { display: none !important; }
   .app { max-width: 100%; padding: 0; }
+  .screen { display: none !important; }
+  .screen.active { display: none !important; }
+  #slip-print-area { display: block !important; }
+  .print-slip { page-break-after: always; border: 1.5px solid #000; padding: 14px; margin: 0; }
+  .print-slip:last-child { page-break-after: avoid; }
 }
+#slip-print-area { display: none; position: fixed; top: 0; left: 0; width: 100%; background: white; z-index: 9999; }
 .sync-bar{display:flex;align-items:center;gap:7px;padding:8px 12px;border-radius:var(--radius-md);margin-bottom:10px;font-size:12px;font-weight:500;}
 .sync-bar.online{background:var(--green-light);color:var(--green);}
 .sync-bar.offline{background:var(--amber-light);color:var(--amber);}
@@ -393,6 +399,9 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 </div>
 
 </div>
+
+<!-- Row slip print area — hidden normally, shown only when printing -->
+<div id="slip-print-area"></div>
 
 <!-- PIN handler — isolated script, loads first, no dependencies -->
 <script>
@@ -1208,12 +1217,57 @@ function renderSummary(id){
     const lines=row.entries.filter(e=>e.skuId&&e.qty>0).map(e=>{const sk=skus.find(x=>x.id==e.skuId);return sk?`${sk.name}: <b>${e.qty}</b> ${sk.unit}`:''}).filter(Boolean).join(' | ');
     return lines?`<div class="summary-row"><span style="font-size:13px;font-weight:600;white-space:nowrap;">Row ${row.row}</span><span style="font-size:13px;color:var(--text-secondary);text-align:right;flex:1;">${lines}</span></div>`:'';
   }).join('');
-  document.getElementById('summary-actions').innerHTML=`
-    ${canPrintExport()?'<button class="btn btn-primary" onclick="window.print()">Print summary</button>':''}
-    ${canPrintExport()?`<button class="btn btn-success" onclick="doExport('${id}')">Export to CSV</button>`:''}
-    ${!canPrintExport()?'<div class="restricted-banner">🔒 Export and print available to admins and accounts only</div>':''}
-    ${!isAccounts()?'<button class="btn btn-secondary" onclick="backToLoading()">Continue loading</button>':''}
-    <button class="btn btn-secondary" onclick="goTo('screen-home')">Back to home</button>`;
+  var actHTML='';
+  if(canPrintExport()) actHTML+='<button class="btn btn-primary" onclick="window.print()">🖨️ Print full summary</button>';
+  if(isAccounts()||isAdmin()) actHTML+='<button class="btn btn-primary no-print" style="background:var(--blue);" onclick="printRowSlips(\''+id+'\')">📄 Print row-wise slips</button>';
+  if(canPrintExport()) actHTML+='<button class="btn btn-success" onclick="doExport(\''+id+'\')">Export to CSV</button>';
+  if(!canPrintExport()) actHTML+='<div class="restricted-banner">🔒 Export and print available to admins and accounts only</div>';
+  if(!isAccounts()) actHTML+='<button class="btn btn-secondary" onclick="backToLoading()">Continue loading</button>';
+  actHTML+='<button class="btn btn-secondary" onclick="goTo(\'screen-home\')">Back to home</button>';
+  document.getElementById('summary-actions').innerHTML=actHTML;
+}
+function printRowSlips(id){
+  const s=getSess(id||curSessId);
+  const skus=loadSKUs();
+  const filledRows=s.rowData.filter(function(row){return rowFilled(row);});
+  if(!filledRows.length){alert('No rows with entries to print.');return;}
+
+  const rowsHTML=filledRows.map(function(row){
+    const items=row.entries.filter(function(e){return e.skuId&&parseFloat(e.qty)>0;});
+    const itemText=items.map(function(e){
+      const sk=skus.find(function(x){return x.id==e.skuId;});
+      return sk?'<td style="padding:7px 10px;font-size:13px;">'+sk.name+'</td><td style="padding:7px 10px;font-size:13px;text-align:center;font-weight:700;color:#185FA5;">'+e.qty+'</td><td style="padding:7px 10px;font-size:13px;color:#555;">'+sk.unit+'</td>':'';
+    }).filter(Boolean);
+    return '<tr style="background:#f0f4f0;"><td colspan="3" style="padding:8px 10px;font-size:13px;font-weight:700;border-top:1.5px solid #185FA5;">Row '+row.row+'</td></tr>'+
+      itemText.map(function(td){return '<tr style="border-bottom:1px solid #eee;">'+td+'</tr>';}).join('');
+  }).join('');
+
+  const printHTML='<!DOCTYPE html><html><head><meta charset="UTF-8">'+
+    '<title>Row-wise Loading Details — '+s.truck+'</title>'+
+    '<style>body{font-family:Arial,sans-serif;padding:20px;max-width:600px;margin:0 auto;}'+
+    'h2{font-size:18px;margin-bottom:2px;}'+
+    '.info{font-size:12px;color:#555;margin-bottom:4px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:16px;}'+
+    'th{background:#185FA5;color:white;padding:8px 10px;text-align:left;font-size:13px;}'+
+    'tr:nth-child(even){background:#f9f9f9;}'+
+    '.footer{margin-top:16px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:8px;}'+
+    '</style></head><body>'+
+    '<h2>MARUTI LOADING — Row-wise Details</h2>'+
+    '<div class="info"><b>Truck:</b> '+s.truck+' &nbsp;|&nbsp; <b>Date:</b> '+s.date+'</div>'+
+    '<div class="info"><b>Driver:</b> '+(s.driver||'—')+' &nbsp;|&nbsp; <b>IC:</b> '+(s.incharge||'—')+'</div>'+
+    (s.dest?'<div class="info"><b>Destination:</b> → '+s.dest+'</div>':'')+
+    '<table>'+
+      '<thead><tr><th>SKU / Item</th><th style="text-align:center;">Qty</th><th>Unit</th></tr></thead>'+
+      '<tbody>'+rowsHTML+'</tbody>'+
+    '</table>'+
+    '<div class="footer">Printed: '+new Date().toLocaleString()+' &nbsp;|&nbsp; Total loaded rows: '+filledRows.length+'</div>'+
+    '</body></html>';
+
+  const win=window.open('','_blank','width=650,height=800');
+  win.document.write(printHTML);
+  win.document.close();
+  win.focus();
+  win.print();
 }
 function doExport(id){
   if(!canPrintExport()){alert('Only admins and accounts can export.');return;}
