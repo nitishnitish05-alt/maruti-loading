@@ -509,11 +509,13 @@ async function pullCloud(){
     const csess=await window._fb.loadSessions();
     if(csess&&csess.length){
       const loc=loadSessions();
-      const deleted=getDeleted(); // never re-add deleted sessions
+      const deleted=getDeleted();
       const m={};
       loc.forEach(function(s){m[s.id]=s;});
       csess.forEach(function(s){
         if(deleted.indexOf(s.id)>=0) return; // skip deleted
+        // Non-admin users only pull their own sessions
+        if(!isAdmin()&&!isAccounts()&&s.createdBy&&s.createdBy!==CU.username) return;
         if(!m[s.id])m[s.id]=s;
         else if(s.done)m[s.id]=s;
       });
@@ -524,31 +526,28 @@ async function pullCloud(){
 
 function startCloudListener(){
   if(!fbOK||!isOnline||!CU)return;
-  if(CU.role!=='admin'&&CU.role!=='accounts')return;
   if(fbListener){fbListener();fbListener=null;}
-  // Admin listens to ALL sessions (active + completed) in real time
   fbListener=window._fb.listenAll(function(allSessions){
     if(!allSessions.length)return;
     const deleted=getDeleted();
     const loc=loadSessions();let changed=false;
     allSessions.forEach(function(cs){
       if(deleted.indexOf(cs.id)>=0) return;
+      // Non-admin/accounts users only sync their own sessions
+      if(!isAdmin()&&!isAccounts()){
+        if(cs.createdBy&&cs.createdBy!==CU.username) return;
+      }
       const i=loc.findIndex(function(s){return s.id===cs.id;});
       if(i<0){loc.push(cs);changed=true;}
       else{
-        // Cloud wins for completed sessions
-        // For active sessions — only update if cloud version is newer
-        if(cs.done && !loc[i].done){loc[i]=cs;changed=true;}
-        else if(!cs.done && !loc[i].done){
-          // Both active — take cloud version to show latest progress
-          loc[i]=cs;changed=true;
-        }
-        else if(cs.done && loc[i].done){loc[i]=cs;changed=true;}
+        if(cs.done&&!loc[i].done){loc[i]=cs;changed=true;}
+        else if(!cs.done&&!loc[i].done){loc[i]=cs;changed=true;}
+        else if(cs.done&&loc[i].done){loc[i]=cs;changed=true;}
       }
     });
     if(changed){
       SS(K.SESSIONS,loc);
-      renderHome(); // always refresh home for admin to see live updates
+      renderHome();
     }
   });
 }
@@ -640,7 +639,14 @@ async function doLogin(){
   try{ startCloudListener(); }catch(e){}
   try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; }
 }
-function doLogout(){CU=null;editRowIdx=-1;liveRows=[];if(fbListener){fbListener();fbListener=null;}stopTimer();goTo('screen-login');initLogin();}
+function doLogout(){
+  // Clear sessions from localStorage on logout — prevents other users seeing this user's sessions
+  SS(K.SESSIONS,[]);
+  CU=null;editRowIdx=-1;liveRows=[];
+  if(fbListener){fbListener();fbListener=null;}
+  stopTimer();stopAutoSave();
+  goTo('screen-login');initLogin();
+}
 
 // Modal
 function showModal(title,msg,cb){
@@ -885,17 +891,6 @@ function confirmDel(id,truck){
     }
   });
 }
-async function finaliseSession(){
-  persistLive();const s=getSess(curSessId);s.done=true;s.endTime=new Date().toISOString();s.synced=false;
-  saveSess(s);stopTimer();editRowIdx=-1;
-  setSyncBar('syncing','Uploading completed session to cloud...');
-  if(fbOK&&isOnline){
-    const ok=await window._fb.saveSession({...s,synced:true});
-    if(ok){s.synced=true;saveSess(s);setSyncBar('online','✅ Uploaded — admin can now view the report');}
-    else{addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
-  }else{addPQ('session',s.id);setSyncBar('offline','📱 Saved locally — will upload when back online');}
-  renderSummary(curSessId);goTo('screen-summary');
-}
 function startEditSess(id){
   editSessId=id;const s=getSess(id);
   document.getElementById('es-date').value=s.date||'';document.getElementById('es-truck').value=s.truck||'';
@@ -921,11 +916,13 @@ function selectTruck(type){
 function createSession(){
   const date=document.getElementById('ns-date').value,truck=document.getElementById('ns-truck').value.trim(),driver=document.getElementById('ns-driver').value.trim();
   const incharge=document.getElementById('ns-incharge').value.trim(),dest=document.getElementById('ns-dest').value.trim(),rows=parseInt(document.getElementById('ns-rows').value)||10;
-  if(!truck||!driver){alert('Please fill truck number and driver name.');return;}
+  if(!truck){alert('Please enter the truck number.');return;}
+  if(!driver){alert('Please enter the driver name.');return;}
+  if(!incharge){alert('Please enter the loading incharge name.');return;}
+  if(!dest){alert('Please enter the destination.');return;}
   const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
   const newSess={id,date,truck,driver,incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
   const ss=loadSessions();ss.push(newSess);saveSessions(ss);
-  // Push to Firebase immediately so admin can see active session
   if(fbOK&&isOnline&&window._fb){
     window._fb.saveSession(newSess).catch(function(){addPQ('session',id);});
   } else { addPQ('session',id); }
@@ -957,10 +954,31 @@ function renderLoading(id){
   const s=getSess(id),skus=loadSKUs();
   document.getElementById('loading-header').innerHTML=`
     <div class="card no-print">
-      <div style="font-size:16px;font-weight:700;">${s.truck} <span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
-      <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
-      ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:''}
-      ${s.startTime?`<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Started: <b>${fmt12(s.startTime)}</b></div>`:''}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:16px;font-weight:700;">${s.truck} <span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
+        <button class="btn btn-sm btn-secondary" onclick="toggleSessionEdit()" id="sess-edit-btn">✏️ Edit details</button>
+      </div>
+      <!-- View mode -->
+      <div id="sess-view-mode">
+        <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
+        ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:'<div style="font-size:12px;color:var(--red);margin-top:2px;">⚠️ No destination set</div>'}
+        ${s.startTime?`<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Started: <b>${fmt12(s.startTime)}</b></div>`:''}
+      </div>
+      <!-- Edit mode (hidden by default) -->
+      <div id="sess-edit-mode" style="display:none;margin-top:8px;">
+        <div class="field-label">Truck number *</div>
+        <input type="text" id="le-truck" value="${s.truck}" placeholder="Truck number" style="margin-bottom:8px;">
+        <div class="field-label">Driver name *</div>
+        <input type="text" id="le-driver" value="${s.driver||''}" placeholder="Driver name" style="margin-bottom:8px;">
+        <div class="field-label">Loading incharge *</div>
+        <input type="text" id="le-incharge" value="${s.incharge||''}" placeholder="Loading incharge" style="margin-bottom:8px;">
+        <div class="field-label">Destination *</div>
+        <input type="text" id="le-dest" value="${s.dest||''}" placeholder="Destination" style="margin-bottom:8px;">
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveSessionEdit()">Save</button>
+          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="toggleSessionEdit()">Cancel</button>
+        </div>
+      </div>
     </div>`;
   document.getElementById('elapsed-display').innerHTML=elHTML(s);
   startTimer(id);
@@ -973,6 +991,33 @@ function renderLoading(id){
     }
     return activeRowHTML(ri,row,skus,isEdit);
   }).join('');
+}
+
+function toggleSessionEdit(){
+  var view=document.getElementById('sess-view-mode');
+  var edit=document.getElementById('sess-edit-mode');
+  var btn=document.getElementById('sess-edit-btn');
+  if(!view||!edit)return;
+  var isEditing=edit.style.display!=='none';
+  view.style.display=isEditing?'':'none';
+  edit.style.display=isEditing?'none':'';
+  if(btn)btn.textContent=isEditing?'✏️ Edit details':'Cancel';
+}
+
+function saveSessionEdit(){
+  var truck=document.getElementById('le-truck').value.trim();
+  var driver=document.getElementById('le-driver').value.trim();
+  var incharge=document.getElementById('le-incharge').value.trim();
+  var dest=document.getElementById('le-dest').value.trim();
+  if(!truck){alert('Truck number is required.');return;}
+  if(!driver){alert('Driver name is required.');return;}
+  if(!incharge){alert('Loading incharge is required.');return;}
+  if(!dest){alert('Destination is required.');return;}
+  var s=getSess(curSessId);
+  s.truck=truck;s.driver=driver;s.incharge=incharge;s.dest=dest;
+  saveSess(s);
+  cloudSaveProgress();
+  renderLoading(curSessId); // re-render with updated info
 }
 function buildEntryHTML(e, ei, ri, skus){
   var selSku = skus.find(function(sk){return sk.id==e.skuId;});
