@@ -612,20 +612,16 @@ async function doLogin(){
   if(p.length < 4){ errEl.style.color='var(--red)'; errEl.textContent='Please enter your 4-digit PIN.'; return; }
   errEl.style.color='var(--text-secondary)';
   errEl.textContent='Signing in...';
-  // Check local first
-  var user = loadUsersLocal().find(function(x){ return x.username.toLowerCase()===u && x.pin===p; });
-  if(user){
-    CU = user;
-    errEl.textContent='';
-    try{ startCloudListener(); }catch(e){}
-    try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; return; }
-    pullCloud().catch(function(){});
-    return;
+
+  // First pull users/SKUs only (not sessions) to get latest user list
+  if(fbOK&&isOnline&&window._fb){
+    try{
+      const cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
+      const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
+    }catch(e){}
   }
-  // Try cloud
-  errEl.textContent='Checking cloud...';
-  try { await pullCloud(); } catch(e){}
-  user = loadUsersLocal().find(function(x){ return x.username.toLowerCase()===u && x.pin===p; });
+
+  var user = loadUsersLocal().find(function(x){ return x.username.toLowerCase()===u && x.pin===p; });
   if(!user){
     errEl.style.color='var(--red)';
     errEl.textContent='Incorrect username or PIN.';
@@ -634,10 +630,14 @@ async function doLogin(){
     updatePinDisp('login-pin-display','');
     return;
   }
+
+  // Set CU FIRST before any session sync
   CU = user;
   errEl.textContent='';
   try{ startCloudListener(); }catch(e){}
-  try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; }
+  try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; return; }
+  // Now pull sessions — CU is set so filter works correctly
+  pullCloud().catch(function(){});
 }
 function doLogout(){
   // Clear sessions from localStorage on logout — prevents other users seeing this user's sessions
@@ -791,6 +791,7 @@ function renderHome(){
         <div class="session-meta">${s.driver}${s.incharge?' · IC: '+s.incharge:''} · ${s.date} · ${s.rows} rows</div>
         ${s.dest?`<div class="session-dest">→ ${s.dest}</div>`:''}
         ${s.startTime?`<div class="session-time">Started ${fmt12(s.startTime)}${s.endTime?' · Finished '+fmt12(s.endTime):''}</div>`:''}
+        ${isAdmin()&&s.createdBy?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">👤 Created by: <b>${s.createdBy}</b></div>`:''}
       </div>
       <div class="session-actions">
         <span class="badge ${s.done?'badge-done':'badge-active-s'}">${s.done?'Done':'Active'}</span>
