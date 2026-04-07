@@ -286,6 +286,8 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       </div>
     </div>
   </div>
+  <!-- Daily SKU totals summary — shown on Completed tab for admin/accounts -->
+  <div id="daily-totals-bar" style="display:none;"></div>
   <div id="sessions-list"></div>
   <button class="btn btn-primary" id="new-session-btn" onclick="goTo('screen-new-session')">+ Start new loading session</button>
 </div>
@@ -783,6 +785,54 @@ function clearDateFilter(){
   renderHome();
 }
 
+function renderDailyTotals(sessions){
+  var el=document.getElementById('daily-totals-bar');
+  if(!el)return;
+  if(!canViewCompleted()||homeFilter!=='done'){el.style.display='none';return;}
+
+  // Calculate SKU totals across all shown completed sessions
+  var skus=loadSKUsLocal();
+  var totals={};
+  sessions.forEach(function(s){
+    if(!s.rowData)return;
+    s.rowData.forEach(function(row){
+      if(!row.entries)return;
+      row.entries.forEach(function(e){
+        if(!e.skuId||!e.qty)return;
+        var sk=skus.find(function(x){return x.id==e.skuId;});
+        if(!sk)return;
+        if(!totals[sk.id])totals[sk.id]={name:sk.name,unit:sk.unit,qty:0};
+        totals[sk.id].qty+=parseFloat(e.qty)||0;
+      });
+    });
+  });
+
+  var vals=Object.values(totals);
+  if(!vals.length){el.style.display='none';return;}
+
+  var grandTotal=vals.reduce(function(a,b){return a+b.qty;},0);
+
+  // Get date label
+  var filterDate=document.getElementById('filter-date');
+  var dateLabel=filterDate&&filterDate.value?filterDate.value:'all shown dates';
+
+  el.style.display='block';
+  el.innerHTML='<div class="card" style="margin-bottom:12px;border-left:3px solid var(--blue);">'+
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">'+
+      '<div style="font-size:13px;font-weight:700;color:var(--blue-dark);">📊 Total Dispatched — '+dateLabel+'</div>'+
+      '<div style="font-size:12px;color:var(--text-secondary);font-weight:600;">'+sessions.length+' truck'+(sessions.length!==1?'s':'')+' · '+grandTotal+' units total</div>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">'+
+    vals.map(function(t){
+      return '<div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:8px 10px;display:flex;justify-content:space-between;align-items:center;">'+
+        '<div style="font-size:12px;font-weight:500;color:var(--text-primary);">'+t.name+'</div>'+
+        '<div style="font-size:14px;font-weight:700;color:var(--blue);">'+t.qty+' <span style="font-size:11px;color:var(--text-secondary);font-weight:400;">'+t.unit+'</span></div>'+
+      '</div>';
+    }).join('')+
+    '</div>'+
+  '</div>';
+}
+
 function homeTab(f,btn){
   if(f==='done'&&!canViewCompleted()){alert('Only admins and accounts can view completed sessions.');return;}
   if(f==='active'&&isAccounts()){alert('Accounts role can only view completed sessions.');return;}
@@ -824,6 +874,9 @@ function renderHome(){
   if(sortBar){
     sortBar.style.display=(homeFilter==='done'&&canViewCompleted())?'block':'none';
   }
+  // Hide daily totals if not on completed tab
+  var dtBar=document.getElementById('daily-totals-bar');
+  if(dtBar&&homeFilter!=='done')dtBar.style.display='none';
 
   // Apply date filter if set (Completed tab only)
   if(homeFilter==='done'){
@@ -847,11 +900,13 @@ function renderHome(){
 
   const el=document.getElementById('sessions-list');
   if(!sessions.length){
+    renderDailyTotals([]);
     el.innerHTML='<div class="empty-state">'+(homeFilter==='active'?'No active sessions.':(document.getElementById('filter-date')&&document.getElementById('filter-date').value?'No sessions found for this date.':'No completed sessions.'))+'</div>';
     const newBtn=document.getElementById('new-session-btn');
     if(newBtn)newBtn.style.display=isAccounts()?'none':'';
     return;
   }
+  renderDailyTotals(sessions);
   el.innerHTML=sessions.map(s=>`
     <div class="session-card">
       <div class="session-info" onclick="openSession('${s.id}')">
