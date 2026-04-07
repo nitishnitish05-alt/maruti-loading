@@ -273,6 +273,19 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <button class="tab active" id="tab-active" onclick="homeTab('active',this)">Active</button>
     <button class="tab" id="tab-done" onclick="homeTab('done',this)">Completed</button>
   </div>
+  <!-- Sort/filter bar — shown only on Completed tab for admin/accounts -->
+  <div id="sort-bar" style="display:none;margin-bottom:12px;">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div style="font-size:12px;color:var(--text-secondary);font-weight:500;">Sort by date:</div>
+      <button class="btn btn-sm" id="sort-btn-desc" onclick="setSort('desc')" style="background:var(--blue);color:#fff;border:none;">↓ Newest first</button>
+      <button class="btn btn-sm btn-secondary" id="sort-btn-asc" onclick="setSort('asc')">↑ Oldest first</button>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:6px;">
+        <div style="font-size:12px;color:var(--text-secondary);">Filter date:</div>
+        <input type="date" id="filter-date" style="width:auto;margin-bottom:0;padding:5px 8px;font-size:12px;" onchange="renderHome()">
+        <button class="btn btn-sm btn-secondary" onclick="clearDateFilter()">✕</button>
+      </div>
+    </div>
+  </div>
   <div id="sessions-list"></div>
   <button class="btn btn-primary" id="new-session-btn" onclick="goTo('screen-new-session')">+ Start new loading session</button>
 </div>
@@ -464,6 +477,7 @@ try {
 <script>
 const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1'};
 let CU=null,curSessId=null,homeFilter='active',truckType='small';
+let sortOrder='desc'; // 'desc' = newest first, 'asc' = oldest first
 let pendingModal=null,editSessId=null,elTimer=null;
 let editRowIdx=-1,liveRows=[],editRowSnap=null;
 let editUserId=null,fbListener=null;
@@ -755,6 +769,20 @@ window.addEventListener('popstate', function(e){
 });
 
 // Home
+function setSort(order){
+  sortOrder=order;
+  var btnDesc=document.getElementById('sort-btn-desc');
+  var btnAsc=document.getElementById('sort-btn-asc');
+  if(btnDesc)btnDesc.style.cssText=order==='desc'?'background:var(--blue);color:#fff;border:none;':'';
+  if(btnAsc)btnAsc.style.cssText=order==='asc'?'background:var(--blue);color:#fff;border:none;':'';
+  renderHome();
+}
+function clearDateFilter(){
+  var f=document.getElementById('filter-date');
+  if(f)f.value='';
+  renderHome();
+}
+
 function homeTab(f,btn){
   if(f==='done'&&!canViewCompleted()){alert('Only admins and accounts can view completed sessions.');return;}
   if(f==='active'&&isAccounts()){alert('Accounts role can only view completed sessions.');return;}
@@ -786,14 +814,45 @@ function renderHome(){
   // Admin/accounts see all sessions, users only see their own
   const filtered=allSessions.filter(function(s){
     if(isAdmin()||isAccounts()) return true;
-    // If createdBy is missing, show to everyone (legacy sessions)
     if(!s.createdBy) return true;
     return s.createdBy===CU.username;
   });
-  const sessions=filtered.filter(s=>homeFilter==='active'?!s.done:s.done);
+  var sessions=filtered.filter(s=>homeFilter==='active'?!s.done:s.done);
+
+  // Show/hide sort bar — only on Completed tab for admin/accounts
+  var sortBar=document.getElementById('sort-bar');
+  if(sortBar){
+    sortBar.style.display=(homeFilter==='done'&&canViewCompleted())?'block':'none';
+  }
+
+  // Apply date filter if set (Completed tab only)
+  if(homeFilter==='done'){
+    var filterDate=document.getElementById('filter-date');
+    if(filterDate&&filterDate.value){
+      sessions=sessions.filter(function(s){return s.date===filterDate.value;});
+    }
+    // Apply sort order
+    sessions=sessions.slice().sort(function(a,b){
+      var da=a.date||'';var db=b.date||'';
+      if(da===db){
+        // Secondary sort by start time
+        var ta=a.startTime||'';var tb=b.startTime||'';
+        return sortOrder==='asc'?ta.localeCompare(tb):tb.localeCompare(ta);
+      }
+      return sortOrder==='asc'?da.localeCompare(db):db.localeCompare(da);
+    });
+  } else {
+    sessions=sessions.slice().reverse();
+  }
+
   const el=document.getElementById('sessions-list');
-  if(!sessions.length){el.innerHTML=`<div class="empty-state">${homeFilter==='active'?'No active sessions.':'No completed sessions.'}</div>`;return;}
-  el.innerHTML=sessions.slice().reverse().map(s=>`
+  if(!sessions.length){
+    el.innerHTML='<div class="empty-state">'+(homeFilter==='active'?'No active sessions.':(document.getElementById('filter-date')&&document.getElementById('filter-date').value?'No sessions found for this date.':'No completed sessions.'))+'</div>';
+    const newBtn=document.getElementById('new-session-btn');
+    if(newBtn)newBtn.style.display=isAccounts()?'none':'';
+    return;
+  }
+  el.innerHTML=sessions.map(s=>`
     <div class="session-card">
       <div class="session-info" onclick="openSession('${s.id}')">
         <div class="session-truck">${s.truck}<span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
@@ -808,7 +867,6 @@ function renderHome(){
         ${isAdmin()?`<button class="icon-btn del" onclick="confirmDel('${s.id}','${s.truck}')">🗑️</button>`:''}
       </div>
     </div>`).join('');
-  // Accounts — no new session button
   const newBtn=document.getElementById('new-session-btn');
   if(newBtn)newBtn.style.display=isAccounts()?'none':'';
 }
