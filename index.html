@@ -272,6 +272,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="tab-bar">
     <button class="tab active" id="tab-active" onclick="homeTab('active',this)">Active</button>
     <button class="tab" id="tab-done" onclick="homeTab('done',this)">Completed</button>
+    <button class="tab" id="tab-summary" onclick="homeTab('summary',this)">Summary</button>
   </div>
   <!-- Sort/filter bar — shown only on Completed tab for admin/accounts -->
   <div id="sort-bar" style="display:none;margin-bottom:12px;">
@@ -788,7 +789,7 @@ function clearDateFilter(){
 function renderDailyTotals(sessions){
   var el=document.getElementById('daily-totals-bar');
   if(!el)return;
-  if(!canViewCompleted()||homeFilter!=='done'){el.style.display='none';return;}
+  if(!canViewCompleted()){el.style.display='none';return;}
 
   // Calculate SKU totals across all shown completed sessions
   var skus=loadSKUsLocal();
@@ -836,6 +837,7 @@ function renderDailyTotals(sessions){
 function homeTab(f,btn){
   if(f==='done'&&!canViewCompleted()){alert('Only admins and accounts can view completed sessions.');return;}
   if(f==='active'&&isAccounts()){alert('Accounts role can only view completed sessions.');return;}
+  if(f==='summary'&&!canViewCompleted()){alert('Only admins and accounts can view summary.');return;}
   homeFilter=f; document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); btn.classList.add('active'); renderHome();
 }
 function renderHome(){
@@ -848,47 +850,66 @@ function renderHome(){
   else setSyncBar('offline','Offline — changes will sync when connected');
   // Admin panel button — admin only
   document.getElementById('admin-bar').innerHTML=isAdmin()?`<button class="btn btn-warn no-print" style="margin-bottom:12px;" onclick="goTo('screen-admin')">&#9881; Admin panel</button>`:'';
-  // Tabs — accounts sees only Completed, user sees only Active, admin sees both
+  // Tabs visibility
   const td=document.getElementById('tab-done');
   const ta=document.getElementById('tab-active');
+  const ts=document.getElementById('tab-summary');
   if(isAccounts()){
-    // Accounts — default to completed tab, hide active
     if(ta)ta.style.display='none';
     if(td)td.style.opacity='1';
+    if(ts)ts.style.opacity='1';
     if(homeFilter==='active') homeFilter='done';
   } else {
     if(ta)ta.style.display='';
     if(td)td.style.opacity=isAdmin()?'1':'0.4';
+    if(ts)ts.style.display=canViewCompleted()?'':'none';
   }
+
   const allSessions=loadSessions();
-  // Admin/accounts see all sessions, users only see their own
   const filtered=allSessions.filter(function(s){
     if(isAdmin()||isAccounts()) return true;
     if(!s.createdBy) return true;
     return s.createdBy===CU.username;
   });
+
+  // ── SUMMARY TAB ───────────────────────────────────────────────
+  if(homeFilter==='summary'){
+    document.getElementById('sort-bar').style.display='block';
+    document.getElementById('sessions-list').style.display='none';
+    document.getElementById('new-session-btn').style.display='none';
+    document.getElementById('daily-totals-bar').style.display='block';
+
+    // Get all completed sessions
+    var summSessions=filtered.filter(function(s){return s.done;});
+
+    // Apply date filter
+    var filterDate=document.getElementById('filter-date');
+    if(filterDate&&filterDate.value){
+      summSessions=summSessions.filter(function(s){return s.date===filterDate.value;});
+    }
+    renderDailyTotals(summSessions);
+    return;
+  }
+
+  // ── ACTIVE / COMPLETED TABS ───────────────────────────────────
+  document.getElementById('sessions-list').style.display='';
+  document.getElementById('daily-totals-bar').style.display='none';
+
   var sessions=filtered.filter(s=>homeFilter==='active'?!s.done:s.done);
 
-  // Show/hide sort bar — only on Completed tab for admin/accounts
+  // Show/hide sort bar — only on Completed tab
   var sortBar=document.getElementById('sort-bar');
-  if(sortBar){
-    sortBar.style.display=(homeFilter==='done'&&canViewCompleted())?'block':'none';
-  }
-  // Hide daily totals if not on completed tab
-  var dtBar=document.getElementById('daily-totals-bar');
-  if(dtBar&&homeFilter!=='done')dtBar.style.display='none';
+  if(sortBar) sortBar.style.display=(homeFilter==='done'&&canViewCompleted())?'block':'none';
 
-  // Apply date filter if set (Completed tab only)
+  // Apply date filter + sort on Completed tab
   if(homeFilter==='done'){
     var filterDate=document.getElementById('filter-date');
     if(filterDate&&filterDate.value){
       sessions=sessions.filter(function(s){return s.date===filterDate.value;});
     }
-    // Apply sort order
     sessions=sessions.slice().sort(function(a,b){
       var da=a.date||'';var db=b.date||'';
       if(da===db){
-        // Secondary sort by start time
         var ta=a.startTime||'';var tb=b.startTime||'';
         return sortOrder==='asc'?ta.localeCompare(tb):tb.localeCompare(ta);
       }
@@ -900,13 +921,11 @@ function renderHome(){
 
   const el=document.getElementById('sessions-list');
   if(!sessions.length){
-    renderDailyTotals([]);
     el.innerHTML='<div class="empty-state">'+(homeFilter==='active'?'No active sessions.':(document.getElementById('filter-date')&&document.getElementById('filter-date').value?'No sessions found for this date.':'No completed sessions.'))+'</div>';
     const newBtn=document.getElementById('new-session-btn');
     if(newBtn)newBtn.style.display=isAccounts()?'none':'';
     return;
   }
-  renderDailyTotals(sessions);
   el.innerHTML=sessions.map(s=>`
     <div class="session-card">
       <div class="session-info" onclick="openSession('${s.id}')">
