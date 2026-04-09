@@ -623,6 +623,13 @@ try {
     async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
     async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){return false;}},
+    async loadContractors(){try{const sn=await _db.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveProdEntry(e){try{await _db.collection("prod_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
+    async deleteProdEntry(id){try{await _db.collection("prod_entries").doc(id).delete();return true;}catch(e){return false;}},
+    async loadProdEntries(){try{const sn=await _db.collection("prod_entries").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
+    async saveOpeningStock(o){try{await _db.collection("stock_config").doc("opening").set({data:o});return true;}catch(e){return false;}},
+    async loadOpeningStock(){try{const sn=await _db.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(e){return null;}},
     listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{}); },
     listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{});}
   };
@@ -674,6 +681,9 @@ async function syncQueue(){
       if(item.type==='session'){const s=loadSessions().find(x=>x.id===item.id);if(s){const ok=await window._fb.saveSession(s);if(ok)delPQ('session',item.id);else fail++;}else delPQ('session',item.id);}
       else if(item.type==='users'){const ok=await window._fb.saveUsers(loadUsersLocal());if(ok)delPQ('users','users');else fail++;}
       else if(item.type==='skus'){const ok=await window._fb.saveSKUs(loadSKUsLocal());if(ok)delPQ('skus','skus');else fail++;}
+      else if(item.type==='contractors'&&window._fb.saveContractors){const ok=await window._fb.saveContractors(loadContractors());if(ok)delPQ('contractors','contractors');else fail++;}
+      else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
+      else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
     }catch(e){fail++;}
   }
   if(fail)setSyncBar('error',`${fail} item(s) failed — will retry`);
@@ -696,13 +706,22 @@ async function pullCloud(){
       const m={};
       loc.forEach(function(s){m[s.id]=s;});
       csess.forEach(function(s){
-        if(deleted.indexOf(s.id)>=0) return; // skip deleted
-        // Non-admin users only pull their own sessions
+        if(deleted.indexOf(s.id)>=0) return;
         if(!isAdmin()&&!isAccounts()&&s.createdBy&&s.createdBy!==CU.username) return;
         if(!m[s.id])m[s.id]=s;
         else if(s.done)m[s.id]=s;
       });
       SS(K.SESSIONS,Object.values(m));
+    }
+    // Pull stock data — contractors, prod entries, opening stock
+    if(window._fb.loadContractors){
+      const cc=await window._fb.loadContractors();if(cc)SS(SK.CONTRACTORS,cc);
+    }
+    if(window._fb.loadProdEntries){
+      const cp=await window._fb.loadProdEntries();if(cp)SS(SK.PROD_ENTRIES,cp);
+    }
+    if(window._fb.loadOpeningStock){
+      const co=await window._fb.loadOpeningStock();if(co)SS(SK.OPENING,co);
     }
   }catch(e){}
 }
@@ -1683,9 +1702,17 @@ var stockSortOrder='alpha'; // 'alpha', 'high', 'low'
 function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
 function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
 function loadOpeningStock(){return LS(SK.OPENING)||{};}
-function saveOpeningStockData(o){SS(SK.OPENING,o);}
+function saveOpeningStockData(o){
+  SS(SK.OPENING,o);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveOpeningStock)window._fb.saveOpeningStock(o);
+  else addPQ('opening','opening');
+}
 function loadContractors(){return LS(SK.CONTRACTORS)||[];}
-function saveContractors(c){SS(SK.CONTRACTORS,c);}
+function saveContractors(c){
+  SS(SK.CONTRACTORS,c);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveContractors)window._fb.saveContractors(c);
+  else addPQ('contractors','contractors');
+}
 
 // Save/load stock data to Firebase
 async function syncStockToCloud(){
@@ -1846,11 +1873,24 @@ function renderStockHome(){
   if(isProduction()){
     document.getElementById('prod-supervisor-home').style.display='';
     document.getElementById('stock-dashboard').style.display='none';
+    // Refresh contractors list for the form
+    if(fbOK&&isOnline&&window._fb&&window._fb.loadContractors){
+      window._fb.loadContractors().then(function(r){if(r)SS(SK.CONTRACTORS,r);});
+    }
     renderTodayProdEntries();
   } else if(isAdmin()||isAccounts()){
     document.getElementById('prod-supervisor-home').style.display='none';
     document.getElementById('stock-dashboard').style.display='';
-    renderStockDashboard();
+    // Pull latest stock data from cloud
+    if(fbOK&&isOnline&&window._fb){
+      Promise.all([
+        window._fb.loadContractors&&window._fb.loadContractors().then(function(r){if(r)SS(SK.CONTRACTORS,r);}),
+        window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(r){if(r)SS(SK.PROD_ENTRIES,r);}),
+        window._fb.loadOpeningStock&&window._fb.loadOpeningStock().then(function(r){if(r)SS(SK.OPENING,r);}),
+      ]).then(function(){renderStockDashboard();}).catch(function(){renderStockDashboard();});
+    } else {
+      renderStockDashboard();
+    }
   }
   }catch(e){console.warn('Stock home error:',e);}
 }
@@ -1912,6 +1952,9 @@ function renderStockDashboard(){
       '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
       '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
     '</div>'+
+    '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
+  } else if(aa&&isAccounts()){
+    aa.innerHTML='<button class="btn btn-primary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
     '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa){aa.innerHTML='';}
 
@@ -2109,9 +2152,10 @@ function saveProdStockEntry(){
     createdAt:new Date().toISOString()
   };
   var all=loadProdEntries();all.push(entry);saveProdEntries(all);
-  // Save to Firebase
   if(fbOK&&isOnline&&window._fb&&window._fb.saveProdEntry){
     window._fb.saveProdEntry(entry);
+  } else {
+    addPQ('prod_entry',entry.id);
   }
   goToStock();
 }
@@ -2481,38 +2525,6 @@ function deleteContractor(id){
 }
 
 // Add Firebase prod entry methods — extend window._fb after it loads
-window.addEventListener('fbReady',function(){
-  if(!window._fb)return;
-  // These will be defined if Firebase is available
-  try{
-    var _db2=firebase.firestore();
-    window._fb.saveProdEntry=async function(e){try{await _db2.collection("prod_entries").doc(e.id).set(e);return true;}catch(err){return false;}};
-    window._fb.deleteProdEntry=async function(id){try{await _db2.collection("prod_entries").doc(id).delete();return true;}catch(err){return false;}};
-    window._fb.loadProdEntries=async function(){try{var sn=await _db2.collection("prod_entries").get();return sn.docs.map(function(d){return d.data();});}catch(err){return null;}};
-    window._fb.saveOpeningStock=async function(o){try{await _db2.collection("stock_config").doc("opening").set({data:o});return true;}catch(err){return false;}};
-    window._fb.loadOpeningStock=async function(){try{var sn=await _db2.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(err){return null;}};
-    window._fb.saveContractors=async function(c){try{await _db2.collection("stock_config").doc("contractors").set({list:c});return true;}catch(err){return false;}};
-    window._fb.loadContractors=async function(){try{var sn=await _db2.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(err){return null;}};
-  }catch(e){}
-});
-if(window._fbOK){
-  // Already fired — extend immediately
-  setTimeout(function(){window.dispatchEvent(new Event('fbReady'));},100);
-}
-
-// Override pullCloud to also sync stock data
-var _origPullCloud=null;
-function pullCloudWithStock(){
-  return pullCloud().then?pullCloud().then(function(){
-    if(!fbOK||!isOnline||!window._fb)return;
-    Promise.all([
-      window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(r){if(r)saveProdEntries(r);}),
-      window._fb.loadOpeningStock&&window._fb.loadOpeningStock().then(function(r){if(r)saveOpeningStockData(r);}),
-      window._fb.loadContractors&&window._fb.loadContractors().then(function(r){if(r)saveContractors(r);}),
-    ]).catch(function(){});
-  }):Promise.resolve();
-}
-
 // ═══════════════ END STOCK SECTION ═══════════════
 
 // Boot
