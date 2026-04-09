@@ -1665,18 +1665,9 @@ function calcStockForDate(date){
   var result={};
   skus.forEach(function(sk){
     var openKey=date+'_'+sk.id;
-    var openQty=0;
-    if(opening[openKey]!==undefined){
-      openQty=parseFloat(opening[openKey])||0;
-    } else {
-      // Auto-carry from previous day closing
-      var prevDate=getPrevDateWithData(date);
-      if(prevDate){
-        var prev=calcStockForDate(prevDate);
-        openQty=prev[sk.id]?prev[sk.id].closing:0;
-      }
-    }
-    // Production
+    // Only use manually set opening stock — no recursive carry-forward
+    var openQty=opening[openKey]!==undefined?parseFloat(opening[openKey])||0:0;
+    // Production for this date
     var prodQty=0;
     prodEntries.forEach(function(e){
       e.items.forEach(function(item){
@@ -1694,22 +1685,14 @@ function calcStockForDate(date){
         });
       });
     });
-    var closing=openQty+prodQty-dispQty;
-    result[sk.id]={name:sk.name,unit:sk.unit,opening:openQty,production:prodQty,dispatched:dispQty,closing:closing};
+    result[sk.id]={name:sk.name,unit:sk.unit,opening:openQty,production:prodQty,dispatched:dispQty,closing:openQty+prodQty-dispQty};
   });
   return result;
 }
 
-function getPrevDateWithData(date){
-  var prodDates=loadProdEntries().map(function(e){return e.date;});
-  var sessDates=loadSessions().filter(function(s){return s.done;}).map(function(s){return s.date;});
-  var allDates=prodDates.concat(sessDates).filter(function(d){return d<date;});
-  if(!allDates.length)return null;
-  return allDates.sort().pop();
-}
-
 // ── Stock Home ────────────────────────────────────────────────
 function renderStockHome(){
+  try{
   if(!CU)return;
   var dot=document.getElementById('stock-topbar-dot');
   if(dot)dot.className='role-dot '+CU.role;
@@ -1741,6 +1724,7 @@ function renderStockHome(){
     document.getElementById('stock-dashboard').style.display='';
     renderStockDashboard();
   }
+  }catch(e){console.warn('Stock home error:',e);}
 }
 
 function renderTodayProdEntries(){
