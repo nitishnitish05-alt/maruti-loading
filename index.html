@@ -519,6 +519,44 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   </div>
 </div>
 
+<!-- CONTRACTOR PRODUCTION REPORT -->
+<div class="screen" id="screen-contractor-report">
+  <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
+  <div class="page-title">Contractor Report</div>
+  <div class="page-sub">Production summary by contractor & period</div>
+  <div class="card">
+    <div class="field-label">Contractor</div>
+    <select id="cr-contractor">
+      <option value="">All Contractors</option>
+    </select>
+    <div class="field-label">Period</div>
+    <select id="cr-period" onchange="crPeriodChange()">
+      <option value="week">This Week</option>
+      <option value="month">This Month</option>
+      <option value="year">This Year</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <div id="cr-custom-range" style="display:none;">
+      <div class="inline-row">
+        <div style="flex:1;"><div class="field-label">From</div><input type="date" id="cr-from" style="margin-bottom:0;"></div>
+        <div style="flex:1;"><div class="field-label">To</div><input type="date" id="cr-to" style="margin-bottom:0;"></div>
+      </div>
+    </div>
+    <div style="margin-top:10px;display:flex;gap:8px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="renderContractorReport()">Generate Report</button>
+      <button class="btn btn-secondary no-print" onclick="printContractorReport()">🖨️ Print</button>
+    </div>
+  </div>
+  <!-- Rate entry card — for payment calculation -->
+  <div class="card" id="cr-rate-card" style="display:none;">
+    <div style="font-size:13px;font-weight:600;margin-bottom:10px;">💰 Production Rates (per unit)</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Enter rate per unit for each SKU to calculate payment</div>
+    <div id="cr-rate-inputs"></div>
+    <button class="btn btn-primary btn-sm" onclick="calcPayment()">Calculate Payment</button>
+  </div>
+  <div id="cr-report-output"></div>
+</div>
+
 <!-- OPENING STOCK (Admin) -->
 <div class="screen" id="screen-opening-stock">
   <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
@@ -864,6 +902,7 @@ function goTo(s){
   if(s==='screen-stock-home')renderStockHome();
   if(s==='screen-add-production-stock')initProdStockForm();
   if(s==='screen-opening-stock')initOpeningStockForm();
+  if(s==='screen-contractor-report')initContractorReport();
 }
 function goToStock(){goTo('screen-stock-home');}
 
@@ -882,6 +921,7 @@ window.addEventListener('popstate', function(e){
     'screen-summary':               'screen-loading',
     'screen-add-production-stock':  'screen-stock-home',
     'screen-opening-stock':         'screen-stock-home',
+    'screen-contractor-report':     'screen-stock-home',
   };
   var dest = backMap[id];
   if(dest){
@@ -1868,10 +1908,11 @@ function renderStockDashboard(){
   // Admin actions
   var aa=document.getElementById('stock-admin-actions');
   if(aa&&isAdmin()){
-    aa.innerHTML='<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+    aa.innerHTML='<div style="display:flex;gap:8px;margin-bottom:8px;">'+
       '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
       '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
-    '</div>';
+    '</div>'+
+    '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa){aa.innerHTML='';}
 
   renderStockLedger();
@@ -2117,6 +2158,297 @@ function saveOpeningStockEntry(){
   alert('Opening stock saved for '+date+'!');
   stockViewDate=date;
   goToStock();
+}
+
+// ── Contractor Production Report ──────────────────────────────
+var crReportData=null; // store last generated report for print
+
+function initContractorReport(){
+  var contractors=loadContractors();
+  var sel=document.getElementById('cr-contractor');
+  if(sel){
+    sel.innerHTML='<option value="">All Contractors</option>'+
+      contractors.map(function(c){return '<option value="'+c.id+'">'+c.name+'</option>';}).join('');
+  }
+  // Default to this month
+  document.getElementById('cr-period').value='month';
+  crPeriodChange();
+  document.getElementById('cr-report-output').innerHTML='';
+  document.getElementById('cr-rate-card').style.display='none';
+  crReportData=null;
+}
+
+function crPeriodChange(){
+  var period=document.getElementById('cr-period').value;
+  var customDiv=document.getElementById('cr-custom-range');
+  if(customDiv)customDiv.style.display=period==='custom'?'':'none';
+  if(period!=='custom')renderContractorReport();
+}
+
+function crGetDateRange(){
+  var period=document.getElementById('cr-period').value;
+  var today=new Date();
+  var to=today.toISOString().split('T')[0];
+  var from;
+  if(period==='week'){
+    var day=today.getDay()||7;
+    var mon=new Date(today);mon.setDate(today.getDate()-day+1);
+    from=mon.toISOString().split('T')[0];
+  } else if(period==='month'){
+    from=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-01';
+  } else if(period==='year'){
+    from=today.getFullYear()+'-01-01';
+  } else {
+    from=document.getElementById('cr-from').value||to;
+    to=document.getElementById('cr-to').value||to;
+  }
+  return {from:from,to:to};
+}
+
+function renderContractorReport(){
+  var contractorId=document.getElementById('cr-contractor').value;
+  var contractors=loadContractors();
+  var contractor=contractorId?contractors.find(function(c){return c.id===contractorId;}):null;
+  var range=crGetDateRange();
+  var skus=loadSKUsLocal();
+
+  // Filter entries
+  var entries=loadProdEntries().filter(function(e){
+    var dateOk=e.date>=range.from&&e.date<=range.to;
+    var contOk=!contractorId||(e.contractorId===contractorId||e.contractor===(contractor?contractor.name:''));
+    return dateOk&&contOk;
+  });
+
+  var el=document.getElementById('cr-report-output');
+  var rateCard=document.getElementById('cr-rate-card');
+
+  if(!entries.length){
+    el.innerHTML='<div class="card"><div class="empty-state">No production entries found for this period.</div></div>';
+    rateCard.style.display='none';
+    crReportData=null;
+    return;
+  }
+
+  // Aggregate SKU totals
+  var skuTotals={};
+  var shiftCounts={day:0,night:0};
+  var daySet={};
+  entries.forEach(function(e){
+    shiftCounts[e.shift]=(shiftCounts[e.shift]||0)+1;
+    daySet[e.date]=1;
+    e.items.forEach(function(item){
+      var sk=skus.find(function(s){return s.id==item.skuId;});
+      if(!sk)return;
+      if(!skuTotals[sk.id])skuTotals[sk.id]={skuId:sk.id,name:sk.name,unit:sk.unit,qty:0};
+      skuTotals[sk.id].qty+=parseFloat(item.qty)||0;
+    });
+  });
+
+  var skuRows=Object.values(skuTotals).sort(function(a,b){return a.name.localeCompare(b.name);});
+  var workingDays=Object.keys(daySet).length;
+
+  // Store for print/payment calc
+  crReportData={
+    contractor:contractor?contractor.name:'All Contractors',
+    range:range,
+    entries:entries,
+    skuRows:skuRows,
+    shiftCounts:shiftCounts,
+    workingDays:workingDays
+  };
+
+  // Build report HTML
+  el.innerHTML=
+    '<div class="card">'+
+      '<div style="font-size:15px;font-weight:700;margin-bottom:2px;">'+(contractor?contractor.name:'All Contractors')+'</div>'+
+      '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">'+range.from+' → '+range.to+'</div>'+
+      // Stats row
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">'+
+        '<div style="background:var(--blue-light);border-radius:8px;padding:10px;text-align:center;">'+
+          '<div style="font-size:11px;color:var(--blue);font-weight:600;margin-bottom:2px;">ENTRIES</div>'+
+          '<div style="font-size:22px;font-weight:700;color:var(--blue);">'+entries.length+'</div>'+
+        '</div>'+
+        '<div style="background:var(--green-light);border-radius:8px;padding:10px;text-align:center;">'+
+          '<div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:2px;">DAY SHIFTS</div>'+
+          '<div style="font-size:22px;font-weight:700;color:var(--green);">'+(shiftCounts.day||0)+'</div>'+
+        '</div>'+
+        '<div style="background:var(--purple-light);border-radius:8px;padding:10px;text-align:center;">'+
+          '<div style="font-size:11px;color:var(--purple-dark);font-weight:600;margin-bottom:2px;">NIGHT SHIFTS</div>'+
+          '<div style="font-size:22px;font-weight:700;color:var(--purple-dark);">'+(shiftCounts.night||0)+'</div>'+
+        '</div>'+
+      '</div>'+
+      // SKU totals table
+      '<div style="font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">SKU Production Totals</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 70px 50px;gap:4px;padding:6px 4px;background:var(--bg-secondary);border-radius:6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">'+
+        '<div>SKU</div><div style="text-align:right;">Total Qty</div><div style="text-align:right;">Unit</div>'+
+      '</div>'+
+      skuRows.map(function(t){
+        return '<div style="display:grid;grid-template-columns:1fr 70px 50px;gap:4px;padding:8px 4px;border-bottom:0.5px solid var(--border);align-items:center;">'+
+          '<div style="font-size:13px;font-weight:600;">'+t.name+'</div>'+
+          '<div style="text-align:right;font-size:14px;font-weight:700;color:var(--blue);">'+t.qty+'</div>'+
+          '<div style="text-align:right;font-size:12px;color:var(--text-secondary);">'+t.unit+'</div>'+
+        '</div>';
+      }).join('')+
+      // Daily breakdown toggle
+      '<div style="margin-top:14px;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Day-wise Entries</div>'+
+      buildCrDaywise(entries,skus)+
+    '</div>';
+
+  // Show rate card for payment calc
+  buildRateInputs(skuRows);
+  rateCard.style.display='';
+}
+
+function buildCrDaywise(entries,skus){
+  var byDate={};
+  entries.forEach(function(e){
+    if(!byDate[e.date])byDate[e.date]=[];
+    byDate[e.date].push(e);
+  });
+  return Object.keys(byDate).sort().reverse().map(function(date){
+    return '<div style="margin-bottom:10px;">'+
+      '<div style="font-size:12px;font-weight:700;color:var(--blue);margin-bottom:4px;">'+date+'</div>'+
+      byDate[date].map(function(e){
+        var skuText=e.items.map(function(item){
+          var sk=skus.find(function(s){return s.id==item.skuId;});
+          return sk?sk.name+': <b>'+item.qty+'</b> '+sk.unit:'';
+        }).filter(Boolean).join(' · ');
+        return '<div style="background:var(--bg-secondary);border-radius:6px;padding:8px 10px;margin-bottom:4px;font-size:12px;">'+
+          '<div style="font-weight:600;">'+e.contractor+
+            ' <span class="badge '+(e.shift==='day'?'badge-day':'badge-night')+'">'+(e.shift==='day'?'☀️ Day':'🌙 Night')+'</span></div>'+
+          '<div style="color:var(--text-secondary);margin-top:3px;">'+skuText+'</div>'+
+        '</div>';
+      }).join('')+
+    '</div>';
+  }).join('');
+}
+
+function buildRateInputs(skuRows){
+  var el=document.getElementById('cr-rate-inputs');
+  if(!el)return;
+  el.innerHTML=skuRows.map(function(t){
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
+      '<div style="flex:1;font-size:13px;font-weight:600;">'+t.name+'<div style="font-size:11px;color:var(--text-secondary);">'+t.qty+' '+t.unit+'</div></div>'+
+      '<div style="font-size:12px;color:var(--text-secondary);">₹/'+t.unit+'</div>'+
+      '<input type="number" min="0" id="rate-'+t.skuId+'" placeholder="0.00" style="width:80px;margin-bottom:0;font-size:13px;padding:7px 8px;">'+
+    '</div>';
+  }).join('');
+  document.getElementById('cr-report-output').querySelector&&
+    document.getElementById('cr-report-output').insertAdjacentHTML&&null;
+}
+
+function calcPayment(){
+  if(!crReportData)return;
+  var total=0;
+  var lines=crReportData.skuRows.map(function(t){
+    var rateEl=document.getElementById('rate-'+t.skuId);
+    var rate=rateEl?parseFloat(rateEl.value)||0:0;
+    var amount=t.qty*rate;
+    total+=amount;
+    return {name:t.name,unit:t.unit,qty:t.qty,rate:rate,amount:amount};
+  });
+
+  // Append payment summary to report output
+  var payHTML='<div class="card" style="border-left:3px solid var(--green);">'+
+    '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--green);">💰 Payment Calculation</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 60px 60px 70px;gap:4px;padding:6px 4px;background:var(--bg-secondary);border-radius:6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">'+
+      '<div>SKU</div><div style="text-align:right;">Qty</div><div style="text-align:right;">Rate</div><div style="text-align:right;">Amount</div>'+
+    '</div>'+
+    lines.map(function(l){
+      return '<div style="display:grid;grid-template-columns:1fr 60px 60px 70px;gap:4px;padding:7px 4px;border-bottom:0.5px solid var(--border);font-size:12px;align-items:center;">'+
+        '<div style="font-weight:600;">'+l.name+'<div style="font-size:10px;color:var(--text-secondary);">'+l.unit+'</div></div>'+
+        '<div style="text-align:right;">'+l.qty+'</div>'+
+        '<div style="text-align:right;">₹'+l.rate+'</div>'+
+        '<div style="text-align:right;font-weight:700;">₹'+l.amount.toFixed(2)+'</div>'+
+      '</div>';
+    }).join('')+
+    '<div style="display:flex;justify-content:space-between;padding:10px 4px;font-size:15px;font-weight:700;">'+
+      '<span>Total Payable</span><span style="color:var(--green);">₹'+total.toFixed(2)+'</span>'+
+    '</div>'+
+  '</div>';
+  // Remove old payment card if exists
+  var old=document.getElementById('payment-summary-card');
+  if(old)old.remove();
+  var wrap=document.createElement('div');
+  wrap.id='payment-summary-card';
+  wrap.innerHTML=payHTML;
+  document.getElementById('cr-report-output').appendChild(wrap);
+  crReportData.paymentLines=lines;
+  crReportData.paymentTotal=total;
+}
+
+function printContractorReport(){
+  if(!crReportData){alert('Please generate a report first.');return;}
+  var d=crReportData;
+  var skuTableRows=d.skuRows.map(function(t){
+    return '<tr style="border-bottom:1px solid #eee;">'+
+      '<td style="padding:7px 8px;font-size:13px;">'+t.name+'</td>'+
+      '<td style="padding:7px 8px;text-align:center;font-size:13px;font-weight:700;color:#185FA5;">'+t.qty+'</td>'+
+      '<td style="padding:7px 8px;font-size:12px;color:#555;">'+t.unit+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var paymentSection='';
+  if(d.paymentLines){
+    paymentSection='<h3 style="font-size:14px;margin:20px 0 8px;">Payment Calculation</h3>'+
+      '<table><thead><tr><th style="text-align:left;">SKU</th><th>Qty</th><th>Rate (₹)</th><th>Amount (₹)</th></tr></thead><tbody>'+
+      d.paymentLines.map(function(l){
+        return '<tr style="border-bottom:1px solid #eee;">'+
+          '<td style="padding:6px 8px;font-size:13px;">'+l.name+'</td>'+
+          '<td style="padding:6px 8px;text-align:center;font-size:13px;">'+l.qty+'</td>'+
+          '<td style="padding:6px 8px;text-align:center;font-size:13px;">'+l.rate+'</td>'+
+          '<td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;">'+l.amount.toFixed(2)+'</td>'+
+        '</tr>';
+      }).join('')+
+      '</tbody></table>'+
+      '<div style="text-align:right;font-size:15px;font-weight:700;margin-top:12px;padding:10px;background:#f0f8f0;border-radius:6px;">'+
+        'Total Payable: ₹'+d.paymentTotal.toFixed(2)+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-top:30px;">'+
+        '<div style="border-top:1px solid #000;padding-top:4px;font-size:11px;color:#666;">Prepared by</div>'+
+        '<div style="border-top:1px solid #000;padding-top:4px;font-size:11px;color:#666;">Contractor signature</div>'+
+      '</div>';
+  }
+
+  var printHTML='<html><head><meta charset="UTF-8"><style>'+
+    'body{font-family:Arial,sans-serif;padding:20px;margin:0;}'+
+    'h2{font-size:17px;margin:0 0 3px;}h3{margin:0;}'+
+    '.info{font-size:12px;color:#555;margin-bottom:3px;}'+
+    '.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;}'+
+    '.stat{background:#f5f5f0;border-radius:6px;padding:10px;text-align:center;}'+
+    '.stat-label{font-size:11px;color:#888;}'+
+    '.stat-val{font-size:20px;font-weight:700;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:10px;}'+
+    'th{background:#185FA5;color:white;padding:8px;font-size:12px;}'+
+    'tr:nth-child(even){background:#f9f9f9;}'+
+    '.footer{margin-top:16px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:6px;}'+
+    '</style></head><body>'+
+    '<h2>MARUTI LOADING — Contractor Production Report</h2>'+
+    '<div class="info"><b>Contractor:</b> '+d.contractor+'</div>'+
+    '<div class="info"><b>Period:</b> '+d.range.from+' to '+d.range.to+'</div>'+
+    '<div class="stats">'+
+      '<div class="stat"><div class="stat-label">Total Entries</div><div class="stat-val">'+d.entries.length+'</div></div>'+
+      '<div class="stat"><div class="stat-label">Day Shifts</div><div class="stat-val">'+(d.shiftCounts.day||0)+'</div></div>'+
+      '<div class="stat"><div class="stat-label">Night Shifts</div><div class="stat-val">'+(d.shiftCounts.night||0)+'</div></div>'+
+    '</div>'+
+    '<h3 style="font-size:13px;margin:14px 0 6px;text-transform:uppercase;color:#555;letter-spacing:.05em;">SKU Production Totals</h3>'+
+    '<table><thead><tr><th style="text-align:left;">SKU / Item</th><th>Total Qty</th><th>Unit</th></tr></thead><tbody>'+
+    skuTableRows+'</tbody></table>'+
+    paymentSection+
+    '<div class="footer">Printed: '+new Date().toLocaleString()+'</div>'+
+    '</body></html>';
+
+  var iframe=document.getElementById('print-iframe');
+  if(!iframe){
+    iframe=document.createElement('iframe');
+    iframe.id='print-iframe';
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(printHTML);
+  iframe.contentDocument.close();
+  iframe.onload=function(){iframe.contentWindow.focus();iframe.contentWindow.print();};
 }
 
 // ── Contractor management (in admin panel) ────────────────────
