@@ -75,6 +75,8 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 .role-dot.admin { background: var(--blue); }
 .role-dot.user { background: var(--green); }
 .role-dot.accounts { background: var(--purple-dark); }
+.role-dot.production { background: var(--amber); }
+.badge-production-r { background: var(--amber-light); color: var(--amber); }
 .badge-accounts-r { background: var(--purple-light); color: var(--purple-dark); }
 
 /* Tabs */
@@ -301,6 +303,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="admin-tabs">
     <button class="admin-tab active" onclick="adminTab('users',this)">Users</button>
     <button class="admin-tab" onclick="adminTab('skus',this)">SKU Master</button>
+    <button class="admin-tab" onclick="adminTab('contractors',this)">Contractors</button>
   </div>
   <div id="panel-users">
     <div class="my-account-card">
@@ -317,7 +320,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;">Add new user</div>
       <div class="inline-row" style="margin-bottom:0;">
         <div><div class="field-label">Username</div><input type="text" id="new-user-name" placeholder="e.g. raju" autocomplete="off" style="margin-bottom:0;"></div>
-        <div><div class="field-label">Role</div><select id="new-user-role" style="margin-bottom:0;"><option value="user">User</option><option value="accounts">Accounts</option><option value="admin">Admin</option></select></div>
+        <div><div class="field-label">Role</div><select id="new-user-role" style="margin-bottom:0;"><option value="user">Loading Supervisor</option><option value="production">Production Supervisor</option><option value="accounts">Accounts</option><option value="admin">Admin</option></select></div>
       </div>
       <div style="margin-top:10px;"><div class="field-label">4-digit PIN</div>
         <div class="pin-display" id="nu-pin-display"></div>
@@ -337,6 +340,15 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <button class="btn btn-primary" style="margin-top:10px;" onclick="addSKU()">+ Add SKU</button>
     </div>
     <div class="card"><div id="sku-list"></div></div>
+  </div>
+  <div id="panel-contractors" style="display:none;">
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;">Add new contractor</div>
+      <input type="text" id="new-contractor-name" placeholder="Contractor name" autocomplete="off">
+      <input type="text" id="new-contractor-phone" placeholder="Phone (optional)" autocomplete="off">
+      <button class="btn btn-primary" onclick="addContractor()">+ Add Contractor</button>
+    </div>
+    <div class="card"><div id="contractors-list"></div></div>
   </div>
 </div>
 
@@ -412,6 +424,108 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <div id="rowwise-list"></div>
   </div>
   <div class="no-print" id="summary-actions"></div>
+</div>
+
+<!-- ═══════════════ STOCK SECTION SCREENS ═══════════════ -->
+
+<!-- STOCK HOME -->
+<div class="screen" id="screen-stock-home">
+  <div class="top-bar">
+    <div>
+      <div style="font-size:18px;font-weight:700;">📦 Stock</div>
+      <div style="font-size:12px;color:var(--text-secondary);">Inventory Management</div>
+    </div>
+    <div class="top-bar-right">
+      <div class="user-chip"><span class="role-dot" id="stock-topbar-dot"></span><span id="stock-topbar-name"></span></div>
+      <button class="btn btn-sm btn-secondary" onclick="doLogout()">Sign out</button>
+    </div>
+  </div>
+  <div id="stock-sync-bar"></div>
+
+  <!-- Switch back to Loading (for non-production roles) -->
+  <div id="stock-switch-bar"></div>
+
+  <!-- Production supervisor: just show Add Production button -->
+  <div id="prod-supervisor-home" style="display:none;">
+    <div class="card" style="text-align:center;padding:24px;">
+      <div style="font-size:36px;margin-bottom:10px;">🏭</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Production Entry</div>
+      <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Enter production details after each shift</div>
+      <button class="btn btn-primary" onclick="goTo('screen-add-production-stock')">+ Add Production Entry</button>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;">Today's entries</div>
+      <div id="prod-today-list"></div>
+    </div>
+  </div>
+
+  <!-- Admin/Accounts: full stock dashboard -->
+  <div id="stock-dashboard" style="display:none;">
+    <!-- Date navigation -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-size:13px;color:var(--text-secondary);">📅 <span id="stock-date-label"></span></div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-sm btn-secondary" onclick="stockChangeDate(-1)">‹ Prev</button>
+        <button class="btn btn-sm btn-secondary" onclick="stockChangeDate(1)">Next ›</button>
+        <button class="btn btn-sm btn-primary" onclick="stockGoToday()">Today</button>
+      </div>
+    </div>
+    <!-- Stock ledger -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Stock Ledger</div>
+      <div id="stock-ledger"></div>
+    </div>
+    <!-- Admin actions -->
+    <div id="stock-admin-actions"></div>
+    <!-- Tab bar -->
+    <div class="tab-bar">
+      <button class="tab active" id="stock-tab-prod" onclick="stockTab('production',this)">Production</button>
+      <button class="tab" id="stock-tab-dispatch" onclick="stockTab('dispatch',this)">Dispatched</button>
+    </div>
+    <div id="stock-entries-list"></div>
+  </div>
+</div>
+
+<!-- ADD PRODUCTION (Stock) -->
+<div class="screen" id="screen-add-production-stock">
+  <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
+  <div class="page-title">Add Production</div>
+  <div class="page-sub" id="prod-date-sub">Entry for today</div>
+  <div class="card">
+    <div id="prod-date-field-wrap" style="display:none;">
+      <div class="field-label">Date (Admin — any date)</div>
+      <input type="date" id="prod-entry-date">
+    </div>
+    <div class="field-label">Contractor *</div>
+    <select id="prod-contractor-stock">
+      <option value="">Select contractor...</option>
+    </select>
+    <div class="field-label">Shift *</div>
+    <select id="prod-shift-stock">
+      <option value="">Select shift</option>
+      <option value="day">☀️ Day Shift</option>
+      <option value="night">🌙 Night Shift</option>
+    </select>
+    <div class="field-label">SKU & Quantity *</div>
+    <div id="prod-sku-list-stock"></div>
+    <button class="btn btn-secondary btn-sm" style="margin-bottom:12px;" onclick="addProdStockSKU()">+ Add SKU</button>
+    <button class="btn btn-primary" onclick="saveProdStockEntry()">Save Production Entry</button>
+    <button class="btn btn-secondary" onclick="goToStock()">Cancel</button>
+  </div>
+</div>
+
+<!-- OPENING STOCK (Admin) -->
+<div class="screen" id="screen-opening-stock">
+  <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
+  <div class="page-title">Set Opening Stock</div>
+  <div class="page-sub">Set or adjust opening stock for a specific date</div>
+  <div class="card">
+    <div class="field-label">Date</div>
+    <input type="date" id="opening-date-input">
+    <div id="opening-sku-inputs"></div>
+    <button class="btn btn-primary" onclick="saveOpeningStockEntry()">Save Opening Stock</button>
+    <button class="btn btn-secondary" onclick="goToStock()">Cancel</button>
+  </div>
 </div>
 
 </div>
@@ -592,8 +706,10 @@ function loadSessions(){return LS(K.SESSIONS)||[];}
 function saveSessions(s){SS(K.SESSIONS,s);}
 function isAdmin(){return CU&&CU.role==='admin';}
 function isAccounts(){return CU&&CU.role==='accounts';}
+function isProduction(){return CU&&CU.role==='production';}
 function canViewCompleted(){return isAdmin()||isAccounts();}
 function canPrintExport(){return isAdmin()||isAccounts();}
+function canAccessStock(){return isAdmin()||isAccounts()||isProduction();}
 function clone(o){return JSON.parse(JSON.stringify(o));}
 
 // PIN
@@ -661,7 +777,9 @@ async function doLogin(){
   CU = user;
   errEl.textContent='';
   try{ startCloudListener(); }catch(e){}
-  try{ goTo('screen-home'); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; return; }
+  // Production supervisors go directly to Stock section
+  var loginDest=isProduction()?'screen-stock-home':'screen-home';
+  try{ goTo(loginDest); }catch(e){ errEl.style.color='var(--red)'; errEl.textContent='Error: '+e.message; return; }
   // Now pull sessions — CU is set so filter works correctly
   pullCloud().catch(function(){});
 }
@@ -727,7 +845,6 @@ function saveEditUser(){
 // Routing
 function goTo(s){
   stopTimer();
-  // Only stop auto-save when leaving loading screen
   if(s!=='screen-loading') stopAutoSave();
   var cm=document.getElementById('confirm-modal');if(cm)cm.classList.remove('open');
   var em=document.getElementById('edit-user-modal');if(em)em.classList.remove('open');
@@ -735,38 +852,42 @@ function goTo(s){
   var target=document.getElementById(s);
   if(!target){console.warn('Screen not found:',s);return;}
   target.classList.add('active');
-  // Push history state so Android back button works within app
   window.history.pushState({screen:s}, '', '');
   if(s==='screen-home')renderHome();
   if(s==='screen-admin'){renderAdminUsers();renderSKUs();}
   if(s==='screen-login')initLogin();
+  if(s==='screen-stock-home')renderStockHome();
+  if(s==='screen-add-production-stock')initProdStockForm();
+  if(s==='screen-opening-stock')initOpeningStockForm();
 }
+function goToStock(){goTo('screen-stock-home');}
 
-// Handle Android back button — navigate within app instead of exiting
+// Handle Android back button
 window.addEventListener('popstate', function(e){
   var currentScreen = document.querySelector('.screen.active');
   if(!currentScreen) return;
   var id = currentScreen.id;
-  // Define where each screen should go back to
   var backMap = {
-    'screen-home':      null, // at home — do nothing (don't exit)
-    'screen-admin':     'screen-home',
-    'screen-new-session':'screen-home',
-    'screen-edit-session':'screen-home',
-    'screen-loading':   'screen-home',
-    'screen-summary':   'screen-loading'
+    'screen-home':                  null,
+    'screen-stock-home':            isProduction()?null:'screen-home',
+    'screen-admin':                 'screen-home',
+    'screen-new-session':           'screen-home',
+    'screen-edit-session':          'screen-home',
+    'screen-loading':               'screen-home',
+    'screen-summary':               'screen-loading',
+    'screen-add-production-stock':  'screen-stock-home',
+    'screen-opening-stock':         'screen-stock-home',
   };
   var dest = backMap[id];
   if(dest){
-    // Navigate to previous screen
     document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
     var target=document.getElementById(dest);
     if(target) target.classList.add('active');
     window.history.pushState({screen:dest},'','');
     if(dest==='screen-home'){stopTimer();stopAutoSave();renderHome();}
     if(dest==='screen-loading'){renderLoading(curSessId);startAutoSave();}
+    if(dest==='screen-stock-home')renderStockHome();
   } else {
-    // Already at home — push state again to prevent exit
     window.history.pushState({screen:id},'','');
   }
 });
@@ -843,13 +964,18 @@ function homeTab(f,btn){
 function renderHome(){
   document.getElementById('topbar-name').textContent=CU?CU.username:'';
   const dot=document.getElementById('topbar-dot');
-  if(dot)dot.className='role-dot '+(isAdmin()?'admin':isAccounts()?'accounts':'user');
+  if(dot)dot.className='role-dot '+(isAdmin()?'admin':isAccounts()?'accounts':isProduction()?'production':'user');
   const pend=getPQ().length;
   if(isOnline&&fbOK&&!pend)setSyncBar('online','Connected — all data synced across devices');
   else if(isOnline&&fbOK&&pend)setSyncBar('syncing',`Syncing ${pend} item(s)...`);
   else setSyncBar('offline','Offline — changes will sync when connected');
   // Admin panel button — admin only
-  document.getElementById('admin-bar').innerHTML=isAdmin()?`<button class="btn btn-warn no-print" style="margin-bottom:12px;" onclick="goTo('screen-admin')">&#9881; Admin panel</button>`:'';
+  document.getElementById('admin-bar').innerHTML=isAdmin()?
+    '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+    '<button class="btn btn-warn no-print" style="flex:1;" onclick="goTo(\'screen-admin\')">&#9881; Admin panel</button>'+
+    '<button class="btn btn-sm btn-secondary no-print" style="flex:1;" onclick="goToStock()">📦 Stock</button>'+
+    '</div>':
+    (isAccounts()?'<button class="btn btn-secondary no-print" style="margin-bottom:12px;" onclick="goToStock()">📦 Stock</button>':'');
   // Tabs visibility
   const td=document.getElementById('tab-done');
   const ta=document.getElementById('tab-active');
@@ -950,7 +1076,10 @@ function adminTab(tab,btn){
   document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
   document.getElementById('panel-users').style.display=tab==='users'?'':'none';
   document.getElementById('panel-skus').style.display=tab==='skus'?'':'none';
-  if(tab==='users')renderAdminUsers(); if(tab==='skus')renderSKUs();
+  document.getElementById('panel-contractors').style.display=tab==='contractors'?'':'none';
+  if(tab==='users')renderAdminUsers();
+  if(tab==='skus')renderSKUs();
+  if(tab==='contractors')renderContractors();
 }
 function renderAdminUsers(){
   document.getElementById('my-acc-name').textContent=CU?CU.username:'';
@@ -959,7 +1088,7 @@ function renderAdminUsers(){
   const el=document.getElementById('users-list');
   el.innerHTML=others.length?others.map(u=>`
     <div class="user-row">
-      <div><div style="font-size:14px;font-weight:600;">${u.username}</div><span class="badge ${u.role==='admin'?'badge-admin-r':u.role==='accounts'?'badge-accounts-r':'badge-user-r'}">${u.role}</span></div>
+      <div><div style="font-size:14px;font-weight:600;">${u.username}</div><span class="badge ${u.role==='admin'?'badge-admin-r':u.role==='accounts'?'badge-accounts-r':u.role==='production'?'badge-production-r':'badge-user-r'}">${u.role}</span></div>
       <div style="display:flex;gap:6px;">
         <button class="btn btn-sm btn-secondary" onclick="openEditUser('${u.id}')">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteUser('${u.id}')">Remove</button>
@@ -1491,6 +1620,474 @@ function doExport(id){
   s.rowData.forEach(r=>r.entries.forEach(e=>{const sk=skus.find(x=>x.id==e.skuId);if(sk)csv+=`Row ${r.row},${sk.name},${e.qty},${sk.unit}\n`;}));
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=`${s.truck}_${s.date}.csv`;a.click();
 }
+
+// ═══════════════ STOCK SECTION ═══════════════
+
+// Storage keys for stock
+const SK={
+  PROD_ENTRIES:'ms_prod_entries',
+  OPENING:'ms_opening',
+  CONTRACTORS:'ms_contractors'
+};
+
+var stockViewDate=new Date().toISOString().split('T')[0];
+var stockCurrentTab='production';
+var prodStockSKUs=[{skuId:'',qty:''}];
+
+function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
+function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
+function loadOpeningStock(){return LS(SK.OPENING)||{};}
+function saveOpeningStockData(o){SS(SK.OPENING,o);}
+function loadContractors(){return LS(SK.CONTRACTORS)||[];}
+function saveContractors(c){SS(SK.CONTRACTORS,c);}
+
+// Save/load stock data to Firebase
+async function syncStockToCloud(){
+  if(!fbOK||!isOnline||!window._fb)return;
+  try{
+    var cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
+    var cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
+    // Load production entries
+    var pe=localStorage.getItem('ms_prod_entries_cloud');
+    if(!pe){
+      var sn=await window._fb.loadProdEntries&&window._fb.loadProdEntries();
+      if(sn)SS(SK.PROD_ENTRIES,sn);
+    }
+  }catch(e){}
+}
+
+// Stock calc: opening + production - dispatched = closing
+function calcStockForDate(date){
+  var skus=loadSKUsLocal();
+  var prodEntries=loadProdEntries().filter(function(e){return e.date===date;});
+  var sessions=loadSessions().filter(function(s){return s.done&&s.date===date;});
+  var opening=loadOpeningStock();
+  var result={};
+  skus.forEach(function(sk){
+    var openKey=date+'_'+sk.id;
+    var openQty=0;
+    if(opening[openKey]!==undefined){
+      openQty=parseFloat(opening[openKey])||0;
+    } else {
+      // Auto-carry from previous day closing
+      var prevDate=getPrevDateWithData(date);
+      if(prevDate){
+        var prev=calcStockForDate(prevDate);
+        openQty=prev[sk.id]?prev[sk.id].closing:0;
+      }
+    }
+    // Production
+    var prodQty=0;
+    prodEntries.forEach(function(e){
+      e.items.forEach(function(item){
+        if(item.skuId==sk.id)prodQty+=parseFloat(item.qty)||0;
+      });
+    });
+    // Dispatched via trucks
+    var dispQty=0;
+    sessions.forEach(function(s){
+      if(!s.rowData)return;
+      s.rowData.forEach(function(row){
+        if(!row.entries)return;
+        row.entries.forEach(function(e){
+          if(e.skuId==sk.id&&e.qty)dispQty+=parseFloat(e.qty)||0;
+        });
+      });
+    });
+    var closing=openQty+prodQty-dispQty;
+    result[sk.id]={name:sk.name,unit:sk.unit,opening:openQty,production:prodQty,dispatched:dispQty,closing:closing};
+  });
+  return result;
+}
+
+function getPrevDateWithData(date){
+  var prodDates=loadProdEntries().map(function(e){return e.date;});
+  var sessDates=loadSessions().filter(function(s){return s.done;}).map(function(s){return s.date;});
+  var allDates=prodDates.concat(sessDates).filter(function(d){return d<date;});
+  if(!allDates.length)return null;
+  return allDates.sort().pop();
+}
+
+// ── Stock Home ────────────────────────────────────────────────
+function renderStockHome(){
+  if(!CU)return;
+  var dot=document.getElementById('stock-topbar-dot');
+  if(dot)dot.className='role-dot '+CU.role;
+  var nm=document.getElementById('stock-topbar-name');
+  if(nm)nm.textContent=CU.username;
+
+  // Sync bar
+  var sb=document.getElementById('stock-sync-bar');
+  if(sb)sb.innerHTML=(isOnline&&fbOK)?
+    '<div class="sync-bar online" style="margin-bottom:10px;">✅ Connected</div>':
+    '<div class="sync-bar offline" style="margin-bottom:10px;">⚠️ Offline</div>';
+
+  // Switch bar — back to Loading for non-production
+  var swBar=document.getElementById('stock-switch-bar');
+  if(swBar){
+    if(!isProduction()){
+      swBar.innerHTML='<button class="btn btn-secondary no-print" style="margin-bottom:12px;" onclick="goTo(\'screen-home\')">🚛 Switch to Loading</button>';
+    } else {
+      swBar.innerHTML='';
+    }
+  }
+
+  if(isProduction()){
+    document.getElementById('prod-supervisor-home').style.display='';
+    document.getElementById('stock-dashboard').style.display='none';
+    renderTodayProdEntries();
+  } else if(isAdmin()||isAccounts()){
+    document.getElementById('prod-supervisor-home').style.display='none';
+    document.getElementById('stock-dashboard').style.display='';
+    renderStockDashboard();
+  }
+}
+
+function renderTodayProdEntries(){
+  var today=new Date().toISOString().split('T')[0];
+  var entries=loadProdEntries().filter(function(e){return e.date===today&&e.createdBy===CU.username;});
+  var skus=loadSKUsLocal();
+  var el=document.getElementById('prod-today-list');
+  if(!el)return;
+  if(!entries.length){el.innerHTML='<div style="font-size:13px;color:var(--text-secondary);">No entries yet today.</div>';return;}
+  el.innerHTML=entries.map(function(e){
+    var skuText=e.items.map(function(item){
+      var sk=skus.find(function(s){return s.id==item.skuId;});
+      return sk?sk.name+': <b>'+item.qty+'</b> '+sk.unit:'';
+    }).filter(Boolean).join(' · ');
+    return '<div style="padding:8px 0;border-bottom:0.5px solid var(--border);">'+
+      '<div style="font-size:13px;font-weight:600;">'+e.contractor+
+        ' <span class="badge '+(e.shift==='day'?'badge-day':'badge-night')+'">'+(e.shift==='day'?'☀️ Day':'🌙 Night')+'</span></div>'+
+      '<div style="font-size:12px;color:var(--text-secondary);margin-top:3px;">'+skuText+'</div>'+
+    '</div>';
+  }).join('');
+}
+
+function stockChangeDate(dir){
+  var d=new Date(stockViewDate);d.setDate(d.getDate()+dir);
+  stockViewDate=d.toISOString().split('T')[0];
+  renderStockDashboard();
+}
+function stockGoToday(){stockViewDate=new Date().toISOString().split('T')[0];renderStockDashboard();}
+
+function stockTab(tab,btn){
+  stockCurrentTab=tab;
+  document.querySelectorAll('#stock-dashboard .tab').forEach(function(t){t.classList.remove('active');});
+  if(btn)btn.classList.add('active');
+  renderStockEntries();
+}
+
+function renderStockDashboard(){
+  var dl=document.getElementById('stock-date-label');
+  var today=new Date().toISOString().split('T')[0];
+  if(dl)dl.textContent=stockViewDate+(stockViewDate===today?' (Today)':'');
+
+  // Admin actions
+  var aa=document.getElementById('stock-admin-actions');
+  if(aa&&isAdmin()){
+    aa.innerHTML='<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+      '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
+      '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening Stock</button>'+
+    '</div>';
+  } else if(aa){
+    aa.innerHTML='';
+  }
+
+  // Stock ledger
+  var stock=calcStockForDate(stockViewDate);
+  var skus=loadSKUsLocal();
+  var el=document.getElementById('stock-ledger');
+  if(!el)return;
+  if(!skus.length){el.innerHTML='<div style="font-size:13px;color:var(--text-secondary);">No SKUs configured.</div>';return;}
+
+  el.innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 50px 50px 60px 60px;gap:4px;padding:6px 4px;background:var(--bg-secondary);border-radius:6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">'+
+      '<div>SKU</div><div style="text-align:right;">Open</div><div style="text-align:right;color:var(--green);">+Prod</div><div style="text-align:right;color:var(--red);">-Disp</div><div style="text-align:right;">Close</div>'+
+    '</div>'+
+    skus.map(function(sk){
+      var s=stock[sk.id]||{opening:0,production:0,dispatched:0,closing:0};
+      var closeColor=s.closing<0?'color:var(--red);font-weight:700;':'font-weight:700;';
+      return '<div style="display:grid;grid-template-columns:1fr 50px 50px 60px 60px;gap:4px;padding:7px 4px;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center;">'+
+        '<div style="font-weight:600;font-size:12px;">'+sk.name+'<div style="font-size:10px;color:var(--text-secondary);">'+sk.unit+'</div></div>'+
+        '<div style="text-align:right;">'+s.opening+'</div>'+
+        '<div style="text-align:right;color:var(--green-mid);font-weight:600;">'+s.production+'</div>'+
+        '<div style="text-align:right;color:var(--red);font-weight:600;">'+s.dispatched+'</div>'+
+        '<div style="text-align:right;'+closeColor+'">'+s.closing+'</div>'+
+      '</div>';
+    }).join('');
+
+  renderStockEntries();
+}
+
+function renderStockEntries(){
+  var el=document.getElementById('stock-entries-list');
+  if(!el)return;
+  var skus=loadSKUsLocal();
+  if(stockCurrentTab==='production'){
+    var entries=loadProdEntries().filter(function(e){return e.date===stockViewDate;});
+    if(!entries.length){el.innerHTML='<div class="empty-state">No production entries for this date.</div>';return;}
+    el.innerHTML=entries.slice().reverse().map(function(e){
+      var skuText=e.items.map(function(item){
+        var sk=skus.find(function(s){return s.id==item.skuId;});
+        return sk?sk.name+': <b>'+item.qty+'</b> '+sk.unit:'';
+      }).filter(Boolean).join(' · ');
+      var canDel=isAdmin();
+      return '<div class="card" style="margin-bottom:8px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
+          '<div>'+
+            '<div style="font-size:14px;font-weight:600;">'+e.contractor+
+              ' <span class="badge '+(e.shift==='day'?'badge-day':'badge-night')+'">'+(e.shift==='day'?'☀️ Day':'🌙 Night')+'</span></div>'+
+            '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">by '+e.createdBy+'</div>'+
+            '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'+skuText+'</div>'+
+          '</div>'+
+          (canDel?'<button class="icon-btn del" onclick="deleteProdEntry(\''+e.id+'\')">🗑️</button>':'')+
+        '</div>'+
+      '</div>';
+    }).join('');
+  } else {
+    // Dispatched — from completed loading sessions
+    var sessions=loadSessions().filter(function(s){return s.done&&s.date===stockViewDate;});
+    if(!sessions.length){el.innerHTML='<div class="empty-state">No dispatched trucks for this date.</div>';return;}
+    el.innerHTML=sessions.map(function(s){
+      var totals={};
+      if(s.rowData)s.rowData.forEach(function(row){
+        if(!row.entries)return;
+        row.entries.forEach(function(e){
+          if(!e.skuId||!e.qty)return;
+          var sk=skus.find(function(x){return x.id==e.skuId;});
+          if(!sk)return;
+          if(!totals[sk.id])totals[sk.id]={name:sk.name,unit:sk.unit,qty:0};
+          totals[sk.id].qty+=parseFloat(e.qty)||0;
+        });
+      });
+      var skuText=Object.values(totals).map(function(t){return t.name+': <b>'+t.qty+'</b> '+t.unit;}).join(' · ');
+      return '<div class="card" style="margin-bottom:8px;">'+
+        '<div style="font-size:14px;font-weight:600;">'+s.truck+
+          ' <span class="badge badge-'+(s.truckType==='large'?'large':'small')+'">'+(s.truckType==='large'?'Large':'Small')+'</span></div>'+
+        '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">'+s.driver+(s.dest?' → '+s.dest:'')+'</div>'+
+        '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'+skuText+'</div>'+
+      '</div>';
+    }).join('');
+  }
+}
+
+// ── Production Entry Form ─────────────────────────────────────
+function initProdStockForm(){
+  var today=new Date().toISOString().split('T')[0];
+  // Admin can pick any date, production locked to today
+  var dateWrap=document.getElementById('prod-date-field-wrap');
+  var dateSub=document.getElementById('prod-date-sub');
+  if(isAdmin()){
+    if(dateWrap)dateWrap.style.display='';
+    var di=document.getElementById('prod-entry-date');
+    if(di)di.value=stockViewDate;
+  } else {
+    if(dateWrap)dateWrap.style.display='none';
+    if(dateSub)dateSub.textContent='Entry for today — '+today;
+  }
+  // Populate contractors
+  var contractors=loadContractors();
+  var sel=document.getElementById('prod-contractor-stock');
+  if(sel){
+    sel.innerHTML='<option value="">Select contractor...</option>'+
+      contractors.map(function(c){return '<option value="'+c.id+'">'+c.name+'</option>';}).join('');
+  }
+  document.getElementById('prod-shift-stock').value='';
+  prodStockSKUs=[{skuId:'',qty:''}];
+  renderProdStockSKUs();
+}
+
+function renderProdStockSKUs(){
+  var skus=loadSKUsLocal();
+  var el=document.getElementById('prod-sku-list-stock');
+  if(!el)return;
+  el.innerHTML=prodStockSKUs.map(function(item,i){
+    var selSku=skus.find(function(s){return s.id==item.skuId;});
+    return '<div style="display:grid;grid-template-columns:1fr 80px 32px;gap:6px;align-items:center;margin-bottom:6px;">'+
+      '<div style="position:relative;">'+
+        '<input class="ac-input" type="text" placeholder="Type SKU..." value="'+(selSku?selSku.name:'')+'" '+
+          'data-idx="'+i+'" data-skuid="'+(item.skuId||'')+'" '+
+          'oninput="psAcSearch(this,'+i+')" onfocus="psAcSearch(this,'+i+')" onblur="psAcBlur(this,'+i+')" autocomplete="off" style="margin-bottom:0;">'+
+        '<div class="ac-list" id="ps-ac-'+i+'" style="display:none;"></div>'+
+      '</div>'+
+      '<input type="number" min="0" placeholder="Qty" value="'+(item.qty||'')+'" onchange="prodStockSKUs['+i+'].qty=this.value" style="margin-bottom:0;font-size:13px;padding:8px;">'+
+      '<button class="del-btn" onclick="removeProdStockSKU('+i+')">×</button>'+
+    '</div>';
+  }).join('');
+}
+
+function psAcSearch(inp,i){
+  var q=inp.value.trim().toLowerCase();
+  var skus=loadSKUsLocal();
+  var list=document.getElementById('ps-ac-'+i);if(!list)return;
+  var matches=q.length===0?skus:skus.filter(function(sk){return sk.name.toLowerCase().indexOf(q)>=0;});
+  if(!matches.length){list.innerHTML='<div class="ac-empty">No SKU found</div>';list.style.display='block';return;}
+  list.innerHTML=matches.map(function(sk){
+    return '<div class="ac-item" onmousedown="psAcPick('+i+','+sk.id+',\''+sk.name.replace(/'/g,"\\'")+'\')">'+sk.name+' <span style="font-size:11px;color:var(--text-secondary);">'+sk.unit+'</span></div>';
+  }).join('');
+  list.style.display='block';
+}
+function psAcPick(i,skuId,skuName){
+  prodStockSKUs[i].skuId=skuId;
+  var inp=document.querySelector('.ac-input[data-idx="'+i+'"]');
+  if(inp){inp.value=skuName;inp.dataset.skuid=skuId;}
+  var list=document.getElementById('ps-ac-'+i);if(list)list.style.display='none';
+}
+function psAcBlur(inp,i){
+  setTimeout(function(){
+    var list=document.getElementById('ps-ac-'+i);if(list)list.style.display='none';
+    var val=inp.value.trim().toLowerCase();if(!val)return;
+    var skus=loadSKUsLocal();
+    var partial=skus.filter(function(sk){return sk.name.toLowerCase().indexOf(val)>=0;});
+    if(partial.length===1)psAcPick(i,partial[0].id,partial[0].name);
+    else if(!skus.find(function(sk){return sk.name.toLowerCase()===val;})){prodStockSKUs[i].skuId='';inp.value='';}
+  },200);
+}
+function addProdStockSKU(){prodStockSKUs.push({skuId:'',qty:''});renderProdStockSKUs();}
+function removeProdStockSKU(i){if(prodStockSKUs.length>1){prodStockSKUs.splice(i,1);renderProdStockSKUs();}}
+
+function saveProdStockEntry(){
+  var contractors=loadContractors();
+  var cSel=document.getElementById('prod-contractor-stock');
+  var cId=cSel?cSel.value:'';
+  var cName=cSel&&cSel.selectedIndex>=0?cSel.options[cSel.selectedIndex].text:'';
+  var shift=document.getElementById('prod-shift-stock').value;
+  if(!cId){alert('Please select a contractor.');return;}
+  if(!shift){alert('Please select shift.');return;}
+  var items=prodStockSKUs.filter(function(s){return s.skuId&&parseFloat(s.qty)>0;});
+  if(!items.length){alert('Please add at least one SKU with quantity.');return;}
+
+  var entryDate=new Date().toISOString().split('T')[0];
+  if(isAdmin()){
+    var di=document.getElementById('prod-entry-date');
+    if(di&&di.value)entryDate=di.value;
+  }
+
+  var entry={
+    id:'PE'+Date.now(),
+    date:entryDate,
+    contractor:cName,
+    contractorId:cId,
+    shift:shift,
+    items:items.map(function(s){return{skuId:parseInt(s.skuId)||s.skuId,qty:parseFloat(s.qty)};}),
+    createdBy:CU.username,
+    createdAt:new Date().toISOString()
+  };
+  var all=loadProdEntries();all.push(entry);saveProdEntries(all);
+  // Save to Firebase
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveProdEntry){
+    window._fb.saveProdEntry(entry);
+  }
+  goToStock();
+}
+
+function deleteProdEntry(id){
+  showModal('Delete Entry','Delete this production entry?',function(){
+    saveProdEntries(loadProdEntries().filter(function(e){return e.id!==id;}));
+    if(fbOK&&isOnline&&window._fb&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(id);
+    renderStockDashboard();
+  });
+}
+
+// ── Opening Stock Form ────────────────────────────────────────
+function initOpeningStockForm(){
+  var di=document.getElementById('opening-date-input');
+  if(di)di.value=stockViewDate;
+  renderOpeningInputs();
+}
+function renderOpeningInputs(){
+  var skus=loadSKUsLocal();
+  var opening=loadOpeningStock();
+  var di=document.getElementById('opening-date-input');
+  var date=di?di.value:stockViewDate;
+  var el=document.getElementById('opening-sku-inputs');
+  if(!el)return;
+  el.innerHTML=skus.map(function(sk){
+    var key=date+'_'+sk.id;
+    var val=opening[key]!==undefined?opening[key]:'';
+    return '<div class="field-label">'+sk.name+' ('+sk.unit+')</div>'+
+      '<input type="number" min="0" id="os-'+sk.id+'" value="'+val+'" placeholder="Qty" style="margin-bottom:10px;">';
+  }).join('');
+}
+function saveOpeningStockEntry(){
+  var skus=loadSKUsLocal();
+  var opening=loadOpeningStock();
+  var di=document.getElementById('opening-date-input');
+  var date=di?di.value:stockViewDate;
+  if(!date){alert('Please select a date.');return;}
+  skus.forEach(function(sk){
+    var el=document.getElementById('os-'+sk.id);
+    if(el&&el.value!=='')opening[date+'_'+sk.id]=parseFloat(el.value)||0;
+  });
+  saveOpeningStockData(opening);
+  alert('Opening stock saved for '+date+'!');
+  stockViewDate=date;
+  goToStock();
+}
+
+// ── Contractor management (in admin panel) ────────────────────
+function renderContractors(){
+  var contractors=loadContractors();
+  var el=document.getElementById('contractors-list');if(!el)return;
+  el.innerHTML=contractors.length?contractors.map(function(c){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid var(--border);">'+
+      '<div><div style="font-size:14px;font-weight:600;">'+c.name+'</div>'+(c.phone?'<div style="font-size:12px;color:var(--text-secondary);">📞 '+c.phone+'</div>':'')+
+      '</div><button class="icon-btn del" onclick="deleteContractor(\''+c.id+'\')">🗑️</button></div>';
+  }).join(''):'<div style="font-size:13px;color:var(--text-secondary);">No contractors added yet.</div>';
+}
+function addContractor(){
+  var name=document.getElementById('new-contractor-name').value.trim();
+  var phone=document.getElementById('new-contractor-phone').value.trim();
+  if(!name){alert('Please enter contractor name.');return;}
+  var contractors=loadContractors();
+  if(contractors.find(function(c){return c.name.toLowerCase()===name.toLowerCase();})){alert('"'+name+'" already exists.');return;}
+  contractors.push({id:'C'+Date.now(),name:name,phone:phone});
+  saveContractors(contractors);
+  document.getElementById('new-contractor-name').value='';
+  document.getElementById('new-contractor-phone').value='';
+  renderContractors();
+}
+function deleteContractor(id){
+  showModal('Remove Contractor','Remove this contractor?',function(){
+    saveContractors(loadContractors().filter(function(c){return c.id!==id;}));
+    renderContractors();
+  });
+}
+
+// Add Firebase prod entry methods — extend window._fb after it loads
+window.addEventListener('fbReady',function(){
+  if(!window._fb)return;
+  // These will be defined if Firebase is available
+  try{
+    var _db2=firebase.firestore();
+    window._fb.saveProdEntry=async function(e){try{await _db2.collection("prod_entries").doc(e.id).set(e);return true;}catch(err){return false;}};
+    window._fb.deleteProdEntry=async function(id){try{await _db2.collection("prod_entries").doc(id).delete();return true;}catch(err){return false;}};
+    window._fb.loadProdEntries=async function(){try{var sn=await _db2.collection("prod_entries").get();return sn.docs.map(function(d){return d.data();});}catch(err){return null;}};
+    window._fb.saveOpeningStock=async function(o){try{await _db2.collection("stock_config").doc("opening").set({data:o});return true;}catch(err){return false;}};
+    window._fb.loadOpeningStock=async function(){try{var sn=await _db2.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(err){return null;}};
+    window._fb.saveContractors=async function(c){try{await _db2.collection("stock_config").doc("contractors").set({list:c});return true;}catch(err){return false;}};
+    window._fb.loadContractors=async function(){try{var sn=await _db2.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(err){return null;}};
+  }catch(e){}
+});
+if(window._fbOK){
+  // Already fired — extend immediately
+  setTimeout(function(){window.dispatchEvent(new Event('fbReady'));},100);
+}
+
+// Override pullCloud to also sync stock data
+var _origPullCloud=null;
+function pullCloudWithStock(){
+  return pullCloud().then?pullCloud().then(function(){
+    if(!fbOK||!isOnline||!window._fb)return;
+    Promise.all([
+      window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(r){if(r)saveProdEntries(r);}),
+      window._fb.loadOpeningStock&&window._fb.loadOpeningStock().then(function(r){if(r)saveOpeningStockData(r);}),
+      window._fb.loadContractors&&window._fb.loadContractors().then(function(r){if(r)saveContractors(r);}),
+    ]).catch(function(){});
+  }):Promise.resolve();
+}
+
+// ═══════════════ END STOCK SECTION ═══════════════
 
 // Boot
 function boot(){
