@@ -462,17 +462,22 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <!-- Admin/Accounts: full stock dashboard -->
   <div id="stock-dashboard" style="display:none;">
     <!-- Date navigation -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-size:13px;color:var(--text-secondary);">📅 <span id="stock-date-label"></span></div>
-      <div style="display:flex;gap:6px;">
-        <button class="btn btn-sm btn-secondary" onclick="stockChangeDate(-1)">‹ Prev</button>
-        <button class="btn btn-sm btn-secondary" onclick="stockChangeDate(1)">Next ›</button>
-        <button class="btn btn-sm btn-primary" onclick="stockGoToday()">Today</button>
-      </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+      <div style="font-size:13px;font-weight:600;color:var(--text);">📅</div>
+      <input type="date" id="stock-date-picker" style="flex:1;margin-bottom:0;padding:7px 10px;font-size:13px;" onchange="stockPickDate(this.value)">
+      <button class="btn btn-sm btn-primary" onclick="stockGoToday()">Today</button>
+    </div>
+    <!-- Sort + Print controls -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+      <div style="font-size:12px;color:var(--text-secondary);">Sort:</div>
+      <button class="btn btn-sm" id="sort-alpha-btn" onclick="setStockSort('alpha')" style="background:var(--blue);color:#fff;border:none;font-size:11px;">A→Z</button>
+      <button class="btn btn-sm btn-secondary" id="sort-high-btn" onclick="setStockSort('high')" style="font-size:11px;">High→Low</button>
+      <button class="btn btn-sm btn-secondary" id="sort-low-btn" onclick="setStockSort('low')" style="font-size:11px;">Low→High</button>
+      <button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;font-size:11px;" onclick="printStockStatement()">🖨️ Print</button>
     </div>
     <!-- Stock ledger -->
-    <div class="card">
-      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Stock Ledger</div>
+    <div class="card" id="stock-ledger-card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Stock Ledger — <span id="stock-date-label"></span></div>
       <div id="stock-ledger"></div>
     </div>
     <!-- Admin actions -->
@@ -1633,6 +1638,7 @@ const SK={
 var stockViewDate=new Date().toISOString().split('T')[0];
 var stockCurrentTab='production';
 var prodStockSKUs=[{skuId:'',qty:''}];
+var stockSortOrder='alpha'; // 'alpha', 'high', 'low'
 
 function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
 function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
@@ -1659,38 +1665,120 @@ async function syncStockToCloud(){
 // Stock calc: opening + production - dispatched = closing
 function calcStockForDate(date){
   var skus=loadSKUsLocal();
-  var prodEntries=loadProdEntries().filter(function(e){return e.date===date;});
-  var sessions=loadSessions().filter(function(s){return s.done&&s.date===date;});
+  var allProdEntries=loadProdEntries();
+  var allSessions=loadSessions().filter(function(s){return s.done;});
   var opening=loadOpeningStock();
+
+  // Get all unique dates that have activity, up to and including selected date
+  var dates={};
+  allProdEntries.forEach(function(e){if(e.date<=date)dates[e.date]=1;});
+  allSessions.forEach(function(s){if(s.date<=date)dates[s.date]=1;});
+  // Also include any dates that have manually set opening stock
+  Object.keys(opening).forEach(function(k){
+    var d=k.split('_')[0];if(d&&d<=date)dates[d]=1;
+  });
+  dates[date]=1;
+  var sortedDates=Object.keys(dates).sort();
+
+  // Walk through each date in order, carrying closing → opening
+  var carry={}; // skuId → closing qty from previous day
+  skus.forEach(function(sk){carry[sk.id]=0;});
+
   var result={};
-  skus.forEach(function(sk){
-    var openKey=date+'_'+sk.id;
-    // Only use manually set opening stock — no recursive carry-forward
-    var openQty=opening[openKey]!==undefined?parseFloat(opening[openKey])||0:0;
-    // Production for this date
-    var prodQty=0;
-    prodEntries.forEach(function(e){
-      e.items.forEach(function(item){
-        if(item.skuId==sk.id)prodQty+=parseFloat(item.qty)||0;
-      });
-    });
-    // Dispatched via trucks
-    var dispQty=0;
-    sessions.forEach(function(s){
-      if(!s.rowData)return;
-      s.rowData.forEach(function(row){
-        if(!row.entries)return;
-        row.entries.forEach(function(e){
-          if(e.skuId==sk.id&&e.qty)dispQty+=parseFloat(e.qty)||0;
+  sortedDates.forEach(function(d){
+    var prodEntries=allProdEntries.filter(function(e){return e.date===d;});
+    var sessions=allSessions.filter(function(s){return s.date===d;});
+    skus.forEach(function(sk){
+      var openKey=d+'_'+sk.id;
+      // Admin-set opening takes priority; otherwise carry from prev day
+      var openQty=opening[openKey]!==undefined?parseFloat(opening[openKey])||0:carry[sk.id];
+      var prodQty=0;
+      prodEntries.forEach(function(e){
+        e.items.forEach(function(item){
+          if(item.skuId==sk.id)prodQty+=parseFloat(item.qty)||0;
         });
       });
+      var dispQty=0;
+      sessions.forEach(function(s){
+        if(!s.rowData)return;
+        s.rowData.forEach(function(row){
+          if(!row.entries)return;
+          row.entries.forEach(function(e){
+            if(e.skuId==sk.id&&e.qty)dispQty+=parseFloat(e.qty)||0;
+          });
+        });
+      });
+      var closing=openQty+prodQty-dispQty;
+      if(d===date){
+        result[sk.id]={name:sk.name,unit:sk.unit,opening:openQty,production:prodQty,dispatched:dispQty,closing:closing};
+      }
+      carry[sk.id]=closing; // carry forward to next date
     });
-    result[sk.id]={name:sk.name,unit:sk.unit,opening:openQty,production:prodQty,dispatched:dispQty,closing:openQty+prodQty-dispQty};
+  });
+
+  // If result is empty (no activity before this date), return zeroes
+  skus.forEach(function(sk){
+    if(!result[sk.id])result[sk.id]={name:sk.name,unit:sk.unit,opening:carry[sk.id]||0,production:0,dispatched:0,closing:carry[sk.id]||0};
   });
   return result;
 }
 
-// ── Stock Home ────────────────────────────────────────────────
+function printStockStatement(){
+  var stock=calcStockForDate(stockViewDate);
+  var skus=loadSKUsLocal();
+  var today=new Date().toISOString().split('T')[0];
+
+  // Apply same sort
+  var rows=skus.map(function(sk){
+    return Object.assign({skuId:sk.id},stock[sk.id]||{name:sk.name,unit:sk.unit,opening:0,production:0,dispatched:0,closing:0});
+  });
+  if(stockSortOrder==='alpha') rows.sort(function(a,b){return a.name.localeCompare(b.name);});
+  else if(stockSortOrder==='high') rows.sort(function(a,b){return b.closing-a.closing;});
+  else if(stockSortOrder==='low') rows.sort(function(a,b){return a.closing-b.closing;});
+
+  var tableRows=rows.map(function(s){
+    var closeStyle=s.closing<0?'color:#c00;font-weight:700;':'font-weight:700;';
+    return '<tr style="border-bottom:1px solid #eee;">'+
+      '<td style="padding:7px 8px;font-size:13px;">'+s.name+'<div style="font-size:10px;color:#888;">'+s.unit+'</div></td>'+
+      '<td style="padding:7px 8px;text-align:right;font-size:13px;">'+s.opening+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-size:13px;color:#2a7a4f;font-weight:600;">'+s.production+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-size:13px;color:#c00;font-weight:600;">'+s.dispatched+'</td>'+
+      '<td style="padding:7px 8px;text-align:right;font-size:13px;'+closeStyle+'">'+s.closing+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var printHTML='<html><head><meta charset="UTF-8"><style>'+
+    'body{font-family:Arial,sans-serif;padding:20px;margin:0;}'+
+    'h2{font-size:17px;margin:0 0 3px;}'+
+    '.info{font-size:12px;color:#555;margin-bottom:3px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:14px;}'+
+    'thead tr{background:#185FA5;color:white;}'+
+    'th{padding:8px;text-align:right;font-size:12px;}th:first-child{text-align:left;}'+
+    'tr:nth-child(even){background:#f9f9f9;}'+
+    '.footer{margin-top:12px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:6px;}'+
+    '</style></head><body>'+
+    '<h2>MARUTI LOADING — Stock Statement</h2>'+
+    '<div class="info"><b>Date:</b> '+stockViewDate+(stockViewDate===today?' (Today)':'')+'</div>'+
+    '<div class="info"><b>Printed:</b> '+new Date().toLocaleString()+'</div>'+
+    '<table><thead><tr>'+
+      '<th style="text-align:left;">SKU / Item</th>'+
+      '<th>Opening</th><th>+Production</th><th>-Dispatched</th><th>Closing</th>'+
+    '</tr></thead><tbody>'+tableRows+'</tbody></table>'+
+    '<div class="footer">Formula: Opening + Production - Dispatched = Closing Stock</div>'+
+    '</body></html>';
+
+  var iframe=document.getElementById('print-iframe');
+  if(!iframe){
+    iframe=document.createElement('iframe');
+    iframe.id='print-iframe';
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(printHTML);
+  iframe.contentDocument.close();
+  iframe.onload=function(){iframe.contentWindow.focus();iframe.contentWindow.print();};
+}
 function renderStockHome(){
   try{
   if(!CU)return;
@@ -1747,12 +1835,21 @@ function renderTodayProdEntries(){
   }).join('');
 }
 
-function stockChangeDate(dir){
-  var d=new Date(stockViewDate);d.setDate(d.getDate()+dir);
-  stockViewDate=d.toISOString().split('T')[0];
+function stockPickDate(val){if(val){stockViewDate=val;renderStockDashboard();}}
+function stockGoToday(){
+  stockViewDate=new Date().toISOString().split('T')[0];
+  var dp=document.getElementById('stock-date-picker');
+  if(dp)dp.value=stockViewDate;
   renderStockDashboard();
 }
-function stockGoToday(){stockViewDate=new Date().toISOString().split('T')[0];renderStockDashboard();}
+function setStockSort(order){
+  stockSortOrder=order;
+  ['alpha','high','low'].forEach(function(o){
+    var btn=document.getElementById('sort-'+o+'-btn');
+    if(btn)btn.style.cssText=o===order?'background:var(--blue);color:#fff;border:none;font-size:11px;':'font-size:11px;';
+  });
+  renderStockLedger();
+}
 
 function stockTab(tab,btn){
   stockCurrentTab=tab;
@@ -1762,45 +1859,58 @@ function stockTab(tab,btn){
 }
 
 function renderStockDashboard(){
-  var dl=document.getElementById('stock-date-label');
   var today=new Date().toISOString().split('T')[0];
+  var dl=document.getElementById('stock-date-label');
   if(dl)dl.textContent=stockViewDate+(stockViewDate===today?' (Today)':'');
+  var dp=document.getElementById('stock-date-picker');
+  if(dp)dp.value=stockViewDate;
 
   // Admin actions
   var aa=document.getElementById('stock-admin-actions');
   if(aa&&isAdmin()){
     aa.innerHTML='<div style="display:flex;gap:8px;margin-bottom:12px;">'+
       '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
-      '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening Stock</button>'+
+      '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
     '</div>';
-  } else if(aa){
-    aa.innerHTML='';
-  }
+  } else if(aa){aa.innerHTML='';}
 
-  // Stock ledger
+  renderStockLedger();
+  renderStockEntries();
+}
+
+function renderStockLedger(){
   var stock=calcStockForDate(stockViewDate);
   var skus=loadSKUsLocal();
   var el=document.getElementById('stock-ledger');
   if(!el)return;
   if(!skus.length){el.innerHTML='<div style="font-size:13px;color:var(--text-secondary);">No SKUs configured.</div>';return;}
 
+  // Apply sort
+  var rows=skus.map(function(sk){
+    return Object.assign({skuId:sk.id},stock[sk.id]||{name:sk.name,unit:sk.unit,opening:0,production:0,dispatched:0,closing:0});
+  });
+  if(stockSortOrder==='alpha'){
+    rows.sort(function(a,b){return a.name.localeCompare(b.name);});
+  } else if(stockSortOrder==='high'){
+    rows.sort(function(a,b){return b.closing-a.closing;});
+  } else if(stockSortOrder==='low'){
+    rows.sort(function(a,b){return a.closing-b.closing;});
+  }
+
   el.innerHTML=
     '<div style="display:grid;grid-template-columns:1fr 50px 50px 60px 60px;gap:4px;padding:6px 4px;background:var(--bg-secondary);border-radius:6px;font-size:11px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;margin-bottom:4px;">'+
-      '<div>SKU</div><div style="text-align:right;">Open</div><div style="text-align:right;color:var(--green);">+Prod</div><div style="text-align:right;color:var(--red);">-Disp</div><div style="text-align:right;">Close</div>'+
+      '<div>SKU</div><div style="text-align:right;">Open</div><div style="text-align:right;color:var(--green-mid);">+Prod</div><div style="text-align:right;color:var(--red);">-Disp</div><div style="text-align:right;">Close</div>'+
     '</div>'+
-    skus.map(function(sk){
-      var s=stock[sk.id]||{opening:0,production:0,dispatched:0,closing:0};
-      var closeColor=s.closing<0?'color:var(--red);font-weight:700;':'font-weight:700;';
+    rows.map(function(s){
+      var closeStyle=s.closing<0?'color:var(--red);font-weight:700;':'font-weight:700;';
       return '<div style="display:grid;grid-template-columns:1fr 50px 50px 60px 60px;gap:4px;padding:7px 4px;border-bottom:0.5px solid var(--border);font-size:13px;align-items:center;">'+
-        '<div style="font-weight:600;font-size:12px;">'+sk.name+'<div style="font-size:10px;color:var(--text-secondary);">'+sk.unit+'</div></div>'+
+        '<div style="font-weight:600;font-size:12px;">'+s.name+'<div style="font-size:10px;color:var(--text-secondary);">'+s.unit+'</div></div>'+
         '<div style="text-align:right;">'+s.opening+'</div>'+
         '<div style="text-align:right;color:var(--green-mid);font-weight:600;">'+s.production+'</div>'+
         '<div style="text-align:right;color:var(--red);font-weight:600;">'+s.dispatched+'</div>'+
-        '<div style="text-align:right;'+closeColor+'">'+s.closing+'</div>'+
+        '<div style="text-align:right;'+closeStyle+'">'+s.closing+'</div>'+
       '</div>';
     }).join('');
-
-  renderStockEntries();
 }
 
 function renderStockEntries(){
