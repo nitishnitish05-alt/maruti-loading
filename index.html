@@ -1837,6 +1837,18 @@ function printStockStatement(){
     '</tr>';
   }).join('');
 
+  var totOpen=rows.reduce(function(s,r){return s+r.opening;},0);
+  var totProd=rows.reduce(function(s,r){return s+r.production;},0);
+  var totDisp=rows.reduce(function(s,r){return s+r.dispatched;},0);
+  var totClose=rows.reduce(function(s,r){return s+r.closing;},0);
+  var grandRow='<tr style="background:#dbe9f8;font-weight:700;">'+
+    '<td style="padding:8px 8px;font-size:13px;">Grand Total</td>'+
+    '<td style="padding:8px 8px;text-align:right;font-size:13px;">'+totOpen+'</td>'+
+    '<td style="padding:8px 8px;text-align:right;font-size:13px;color:#2a7a4f;">'+totProd+'</td>'+
+    '<td style="padding:8px 8px;text-align:right;font-size:13px;color:#c00;">'+totDisp+'</td>'+
+    '<td style="padding:8px 8px;text-align:right;font-size:13px;'+(totClose<0?'color:#c00;':'color:#185FA5;')+'">'+totClose+'</td>'+
+  '</tr>';
+
   var printHTML='<html><head><meta charset="UTF-8"><style>'+
     'body{font-family:Arial,sans-serif;padding:20px;margin:0;}'+
     'h2{font-size:17px;margin:0 0 3px;}'+
@@ -1853,7 +1865,7 @@ function printStockStatement(){
     '<table><thead><tr>'+
       '<th style="text-align:left;">SKU / Item</th>'+
       '<th>Opening</th><th>+Production</th><th>-Dispatched</th><th>Closing</th>'+
-    '</tr></thead><tbody>'+tableRows+'</tbody></table>'+
+    '</tr></thead><tbody>'+tableRows+grandRow+'</tbody></table>'+
     '<div class="footer">Formula: Opening + Production - Dispatched = Closing Stock</div>'+
     '</body></html>';
 
@@ -2017,7 +2029,22 @@ function renderStockLedger(){
         '<div style="text-align:right;color:var(--red);font-weight:600;">'+s.dispatched+'</div>'+
         '<div style="text-align:right;'+closeStyle+'">'+s.closing+'</div>'+
       '</div>';
-    }).join('');
+    }).join('')+
+    // Grand totals row
+    (function(){
+      var totOpen=rows.reduce(function(s,r){return s+r.opening;},0);
+      var totProd=rows.reduce(function(s,r){return s+r.production;},0);
+      var totDisp=rows.reduce(function(s,r){return s+r.dispatched;},0);
+      var totClose=rows.reduce(function(s,r){return s+r.closing;},0);
+      var closeTotStyle=totClose<0?'color:var(--red);font-weight:700;':'font-weight:700;';
+      return '<div style="display:grid;grid-template-columns:1fr 50px 50px 60px 60px;gap:4px;padding:8px 4px;background:var(--blue-light);border-radius:6px;margin-top:6px;font-size:13px;align-items:center;">'+
+        '<div style="font-weight:700;font-size:12px;color:var(--blue-dark);">Grand Total</div>'+
+        '<div style="text-align:right;font-weight:700;">'+totOpen+'</div>'+
+        '<div style="text-align:right;color:var(--green-mid);font-weight:700;">'+totProd+'</div>'+
+        '<div style="text-align:right;color:var(--red);font-weight:700;">'+totDisp+'</div>'+
+        '<div style="text-align:right;'+closeTotStyle+'">'+totClose+'</div>'+
+      '</div>';
+    })();
 }
 
 function renderStockEntries(){
@@ -2365,9 +2392,10 @@ function findSimilarSKUs(){
   for(var i=0;i<skus.length;i++){
     for(var j=i+1;j<skus.length;j++){
       var a=skus[i],b=skus[j];
+      // Only compare SKUs with the same unit type
+      if((a.unit||'').toLowerCase().trim()!==(b.unit||'').toLowerCase().trim()) continue;
       var na=normalizeSKUName(a.name);
       var nb=normalizeSKUName(b.name);
-      // Check exact match after normalization, or one contains the other, or edit distance ≤ 2
       if(na===nb||editDistance(na,nb)<=2){
         pairs.push({a:a,b:b,score:editDistance(na,nb)});
       }
@@ -2381,14 +2409,12 @@ function findSimilarSKUs(){
   el.innerHTML='<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Found '+pairs.length+' possible duplicate(s):</div>'+
     pairs.map(function(p){
       return '<div style="background:var(--amber-light);border-radius:8px;padding:10px;margin-bottom:8px;">'+
-        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'+
-          '<div>'+
-            '<div style="font-size:13px;font-weight:600;color:var(--amber);">Possible duplicate</div>'+
-            '<div style="font-size:13px;margin-top:4px;">'+
-              '<b>'+p.a.name+'</b> ('+p.a.unit+')'+
-              ' <span style="color:var(--text-secondary);">vs</span> '+
-              '<b>'+p.b.name+'</b> ('+p.b.unit+')'+
-            '</div>'+
+        '<div style="margin-bottom:8px;">'+
+          '<div style="font-size:13px;font-weight:600;color:var(--amber);">Possible duplicate ('+p.a.unit+')</div>'+
+          '<div style="font-size:13px;margin-top:4px;">'+
+            '<b>'+p.a.name+'</b>'+
+            ' <span style="color:var(--text-secondary);">vs</span> '+
+            '<b>'+p.b.name+'</b>'+
           '</div>'+
         '</div>'+
         '<div style="display:flex;gap:6px;">'+
@@ -2553,7 +2579,13 @@ function renderContractorReport(){
           '<div style="text-align:right;font-size:12px;color:var(--text-secondary);">'+t.unit+'</div>'+
         '</div>';
       }).join('')+
-      // Daily breakdown toggle
+      // Grand total row
+      '<div style="display:grid;grid-template-columns:1fr 70px 50px;gap:4px;padding:10px 4px;background:var(--blue-light);border-radius:6px;margin-top:6px;align-items:center;">'+
+        '<div style="font-size:13px;font-weight:700;color:var(--blue-dark);">Grand Total</div>'+
+        '<div style="text-align:right;font-size:15px;font-weight:700;color:var(--blue);">'+skuRows.reduce(function(s,t){return s+t.qty;},0)+'</div>'+
+        '<div style="text-align:right;font-size:12px;color:var(--text-secondary);">units</div>'+
+      '</div>'+
+      // Daily breakdown
       '<div style="margin-top:14px;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Day-wise Entries</div>'+
       buildCrDaywise(entries,skus)+
     '</div>';
@@ -2697,7 +2729,13 @@ function printContractorReport(){
     '</div>'+
     '<h3 style="font-size:13px;margin:14px 0 6px;text-transform:uppercase;color:#555;letter-spacing:.05em;">SKU Production Totals</h3>'+
     '<table><thead><tr><th style="text-align:left;">SKU / Item</th><th>Total Qty</th><th>Unit</th></tr></thead><tbody>'+
-    skuTableRows+'</tbody></table>'+
+    skuTableRows+
+    '<tr style="background:#dbe9f8;font-weight:700;">'+
+      '<td style="padding:8px;font-size:13px;">Grand Total</td>'+
+      '<td style="padding:8px;text-align:center;font-size:14px;color:#185FA5;">'+d.skuRows.reduce(function(s,t){return s+t.qty;},0)+'</td>'+
+      '<td style="padding:8px;font-size:12px;color:#555;">units</td>'+
+    '</tr>'+
+    '</tbody></table>'+
     paymentSection+
     '<div class="footer">Printed: '+new Date().toLocaleString()+'</div>'+
     '</body></html>';
