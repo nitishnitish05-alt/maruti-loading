@@ -304,6 +304,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <button class="admin-tab active" onclick="adminTab('users',this)">Users</button>
     <button class="admin-tab" onclick="adminTab('skus',this)">SKU Master</button>
     <button class="admin-tab" onclick="adminTab('contractors',this)">Contractors</button>
+    <button class="admin-tab" onclick="adminTab('merge',this)">🔀 Merge SKUs</button>
   </div>
   <div id="panel-users">
     <div class="my-account-card">
@@ -349,6 +350,26 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <button class="btn btn-primary" onclick="addContractor()">+ Add Contractor</button>
     </div>
     <div class="card"><div id="contractors-list"></div></div>
+  </div>
+
+  <!-- SKU MERGE PANEL -->
+  <div id="panel-merge" style="display:none;">
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px;">Merge Duplicate SKUs</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:14px;">Select two SKUs to merge. All quantities in loading sessions and production entries will be combined into the target SKU. The source SKU will be removed.</div>
+      <div class="field-label">Source SKU (to be removed)</div>
+      <select id="merge-source" onchange="updateMergePreview()" style="margin-bottom:10px;"></select>
+      <div class="field-label">Target SKU (keep this one)</div>
+      <select id="merge-target" onchange="updateMergePreview()" style="margin-bottom:10px;"></select>
+      <div id="merge-preview" style="display:none;background:var(--bg-secondary);border-radius:var(--radius-md);padding:12px;margin-bottom:12px;font-size:13px;"></div>
+      <button class="btn btn-primary" onclick="confirmMergeSKUs()" id="merge-btn" disabled>🔀 Merge SKUs</button>
+    </div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Auto-detect similar SKUs</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Finds SKU pairs that look similar (punctuation, spacing, case differences)</div>
+      <button class="btn btn-secondary" onclick="findSimilarSKUs()">🔍 Find Similar SKUs</button>
+      <div id="similar-skus-list" style="margin-top:12px;"></div>
+    </div>
   </div>
 </div>
 
@@ -1141,9 +1162,11 @@ function adminTab(tab,btn){
   document.getElementById('panel-users').style.display=tab==='users'?'':'none';
   document.getElementById('panel-skus').style.display=tab==='skus'?'':'none';
   document.getElementById('panel-contractors').style.display=tab==='contractors'?'':'none';
+  document.getElementById('panel-merge').style.display=tab==='merge'?'':'none';
   if(tab==='users')renderAdminUsers();
   if(tab==='skus')renderSKUs();
   if(tab==='contractors')renderContractors();
+  if(tab==='merge')initMergePanel();
 }
 function renderAdminUsers(){
   document.getElementById('my-acc-name').textContent=CU?CU.username:'';
@@ -2204,7 +2227,204 @@ function saveOpeningStockEntry(){
   goToStock();
 }
 
-// ── Contractor Production Report ──────────────────────────────
+// ── SKU Merge ─────────────────────────────────────────────────
+function initMergePanel(){
+  var skus=loadSKUsLocal();
+  var opts=skus.map(function(sk){return '<option value="'+sk.id+'">'+sk.name+' ('+sk.unit+')</option>';}).join('');
+  document.getElementById('merge-source').innerHTML='<option value="">Select source SKU...</option>'+opts;
+  document.getElementById('merge-target').innerHTML='<option value="">Select target SKU...</option>'+opts;
+  document.getElementById('merge-preview').style.display='none';
+  document.getElementById('merge-btn').disabled=true;
+  document.getElementById('similar-skus-list').innerHTML='';
+}
+
+function skuUsageCount(skuId){
+  // Count how many times this SKU appears across all sessions + prod entries
+  var sessCount=0,prodCount=0;
+  loadSessions().forEach(function(s){
+    if(!s.rowData)return;
+    s.rowData.forEach(function(row){
+      if(!row.entries)return;
+      row.entries.forEach(function(e){if(e.skuId==skuId&&e.qty>0)sessCount++;});
+    });
+  });
+  loadProdEntries().forEach(function(e){
+    e.items.forEach(function(item){if(item.skuId==skuId&&item.qty>0)prodCount++;});
+  });
+  return {sessions:sessCount,production:prodCount};
+}
+
+function updateMergePreview(){
+  var srcId=document.getElementById('merge-source').value;
+  var tgtId=document.getElementById('merge-target').value;
+  var previewEl=document.getElementById('merge-preview');
+  var mergeBtn=document.getElementById('merge-btn');
+  if(!srcId||!tgtId||srcId===tgtId){
+    previewEl.style.display='none';
+    mergeBtn.disabled=true;
+    return;
+  }
+  var skus=loadSKUsLocal();
+  var src=skus.find(function(s){return s.id==srcId;});
+  var tgt=skus.find(function(s){return s.id==tgtId;});
+  var srcUse=skuUsageCount(srcId);
+  var tgtUse=skuUsageCount(tgtId);
+  previewEl.style.display='';
+  previewEl.innerHTML=
+    '<div style="margin-bottom:8px;font-weight:600;">Merge preview:</div>'+
+    '<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:center;margin-bottom:10px;">'+
+      '<div style="background:var(--red-light);border-radius:6px;padding:8px;font-size:12px;">'+
+        '<div style="font-weight:600;color:var(--red);">❌ Remove: '+src.name+'</div>'+
+        '<div style="color:var(--text-secondary);margin-top:3px;">'+srcUse.sessions+' session rows · '+srcUse.production+' prod entries</div>'+
+      '</div>'+
+      '<div style="font-size:18px;text-align:center;">→</div>'+
+      '<div style="background:var(--green-light);border-radius:6px;padding:8px;font-size:12px;">'+
+        '<div style="font-weight:600;color:var(--green-mid);">✅ Keep: '+tgt.name+'</div>'+
+        '<div style="color:var(--text-secondary);margin-top:3px;">'+tgtUse.sessions+' session rows · '+tgtUse.production+' prod entries</div>'+
+      '</div>'+
+    '</div>'+
+    '<div style="font-size:12px;color:var(--amber);background:var(--amber-light);border-radius:6px;padding:8px;">'+
+      '⚠️ All entries currently showing <b>'+src.name+'</b> will be updated to <b>'+tgt.name+'</b>. This cannot be undone.'+
+    '</div>';
+  mergeBtn.disabled=false;
+}
+
+function confirmMergeSKUs(){
+  var srcId=document.getElementById('merge-source').value;
+  var tgtId=document.getElementById('merge-target').value;
+  if(!srcId||!tgtId||srcId===tgtId)return;
+  var skus=loadSKUsLocal();
+  var src=skus.find(function(s){return s.id==srcId;});
+  var tgt=skus.find(function(s){return s.id==tgtId;});
+  showModal(
+    'Confirm Merge',
+    'Merge "'+src.name+'" into "'+tgt.name+'"?\n\nAll loading sessions and production entries will be updated. The SKU "'+src.name+'" will be permanently removed.',
+    function(){doMergeSKUs(parseInt(srcId)||srcId, parseInt(tgtId)||tgtId, src, tgt);}
+  );
+}
+
+function doMergeSKUs(srcId,tgtId,src,tgt){
+  var skus=loadSKUsLocal();
+  var sessions=loadSessions();
+  var prodEntries=loadProdEntries();
+  var sessionsChanged=0, prodChanged=0;
+
+  // Update all loading sessions
+  sessions.forEach(function(s){
+    var changed=false;
+    if(!s.rowData)return;
+    s.rowData.forEach(function(row){
+      if(!row.entries)return;
+      row.entries.forEach(function(e){
+        if(e.skuId==srcId){e.skuId=tgtId;changed=true;}
+      });
+    });
+    if(changed){
+      sessionsChanged++;
+      // Save updated session locally + to Firebase
+      var allSess=loadSessions();
+      var idx=allSess.findIndex(function(x){return x.id===s.id;});
+      if(idx>=0){allSess[idx]=s;saveSessions(allSess);}
+      if(fbOK&&isOnline&&window._fb)window._fb.saveSession(s).catch(function(){});
+    }
+  });
+
+  // Update all production entries
+  prodEntries.forEach(function(e){
+    var changed=false;
+    e.items.forEach(function(item){
+      if(item.skuId==srcId){item.skuId=tgtId;changed=true;}
+    });
+    if(changed){
+      prodChanged++;
+      if(fbOK&&isOnline&&window._fb)window._fb.saveProdEntry(e).catch(function(){});
+    }
+  });
+  if(prodChanged>0)saveProdEntries(prodEntries);
+
+  // Remove source SKU from master list
+  var newSKUs=skus.filter(function(s){return s.id!=srcId;});
+  saveSKUs(newSKUs);
+
+  // Reset panel
+  initMergePanel();
+  document.getElementById('similar-skus-list').innerHTML=
+    '<div style="background:var(--green-light);border-radius:6px;padding:12px;font-size:13px;color:var(--green-mid);">'+
+    '✅ Merge complete! Updated '+sessionsChanged+' loading session(s) and '+prodChanged+' production entr(ies). "'+src.name+'" has been removed.'+
+    '</div>';
+}
+
+// Auto-detect similar SKUs using fuzzy matching
+function normalizeSKUName(name){
+  return name.toLowerCase().replace(/[\s\.\-_,\/\\]/g,'').replace(/x/g,'x');
+}
+
+function findSimilarSKUs(){
+  var skus=loadSKUsLocal();
+  var pairs=[];
+  for(var i=0;i<skus.length;i++){
+    for(var j=i+1;j<skus.length;j++){
+      var a=skus[i],b=skus[j];
+      var na=normalizeSKUName(a.name);
+      var nb=normalizeSKUName(b.name);
+      // Check exact match after normalization, or one contains the other, or edit distance ≤ 2
+      if(na===nb||editDistance(na,nb)<=2){
+        pairs.push({a:a,b:b,score:editDistance(na,nb)});
+      }
+    }
+  }
+  var el=document.getElementById('similar-skus-list');
+  if(!pairs.length){
+    el.innerHTML='<div style="font-size:13px;color:var(--green-mid);padding:10px;">✅ No similar SKUs found! Your SKU list looks clean.</div>';
+    return;
+  }
+  el.innerHTML='<div style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:8px;">Found '+pairs.length+' possible duplicate(s):</div>'+
+    pairs.map(function(p){
+      return '<div style="background:var(--amber-light);border-radius:8px;padding:10px;margin-bottom:8px;">'+
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">'+
+          '<div>'+
+            '<div style="font-size:13px;font-weight:600;color:var(--amber);">Possible duplicate</div>'+
+            '<div style="font-size:13px;margin-top:4px;">'+
+              '<b>'+p.a.name+'</b> ('+p.a.unit+')'+
+              ' <span style="color:var(--text-secondary);">vs</span> '+
+              '<b>'+p.b.name+'</b> ('+p.b.unit+')'+
+            '</div>'+
+          '</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;">'+
+          '<button class="btn btn-sm btn-secondary" style="flex:1;font-size:11px;" '+
+            'onclick="preSelectMerge(\''+p.a.id+'\',\''+p.b.id+'\')">'+
+            'Keep: '+p.b.name.substring(0,20)+'</button>'+
+          '<button class="btn btn-sm btn-secondary" style="flex:1;font-size:11px;" '+
+            'onclick="preSelectMerge(\''+p.b.id+'\',\''+p.a.id+'\')">'+
+            'Keep: '+p.a.name.substring(0,20)+'</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+}
+
+function preSelectMerge(srcId,tgtId){
+  // Scroll to merge selector and pre-fill
+  document.getElementById('merge-source').value=srcId;
+  document.getElementById('merge-target').value=tgtId;
+  updateMergePreview();
+  document.getElementById('merge-source').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+function editDistance(a,b){
+  var m=a.length,n=b.length;
+  var dp=[];
+  for(var i=0;i<=m;i++){dp[i]=[i];for(var j=1;j<=n;j++)dp[i][j]=0;}
+  for(var j=0;j<=n;j++)dp[0][j]=j;
+  for(var i=1;i<=m;i++){
+    for(var j=1;j<=n;j++){
+      if(a[i-1]===b[j-1])dp[i][j]=dp[i-1][j-1];
+      else dp[i][j]=1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+// ── End SKU Merge ─────────────────────────────────────────────
 var crReportData=null; // store last generated report for print
 
 function initContractorReport(){
