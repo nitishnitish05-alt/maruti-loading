@@ -482,33 +482,41 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 
   <!-- Admin/Accounts: full stock dashboard -->
   <div id="stock-dashboard" style="display:none;">
-    <!-- Date navigation -->
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
-      <div style="font-size:13px;font-weight:600;color:var(--text);">📅</div>
-      <input type="date" id="stock-date-picker" style="flex:1;margin-bottom:0;padding:7px 10px;font-size:13px;" onchange="stockPickDate(this.value)">
-      <button class="btn btn-sm btn-primary" onclick="stockGoToday()">Today</button>
-    </div>
-    <!-- Sort + Print controls -->
-    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
-      <div style="font-size:12px;color:var(--text-secondary);">Sort:</div>
-      <button class="btn btn-sm" id="sort-alpha-btn" onclick="setStockSort('alpha')" style="background:var(--blue);color:#fff;border:none;font-size:11px;">A→Z</button>
-      <button class="btn btn-sm btn-secondary" id="sort-high-btn" onclick="setStockSort('high')" style="font-size:11px;">High→Low</button>
-      <button class="btn btn-sm btn-secondary" id="sort-low-btn" onclick="setStockSort('low')" style="font-size:11px;">Low→High</button>
-      <button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;font-size:11px;" onclick="printStockStatement()">🖨️ Print</button>
-    </div>
-    <!-- Stock ledger -->
-    <div class="card" id="stock-ledger-card">
-      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Stock Ledger — <span id="stock-date-label"></span></div>
-      <div id="stock-ledger"></div>
-    </div>
-    <!-- Admin actions -->
+    <!-- Admin actions — shown immediately at top -->
     <div id="stock-admin-actions"></div>
-    <!-- Tab bar -->
+    <!-- Tab bar for entries -->
     <div class="tab-bar">
       <button class="tab active" id="stock-tab-prod" onclick="stockTab('production',this)">Production</button>
       <button class="tab" id="stock-tab-dispatch" onclick="stockTab('dispatch',this)">Dispatched</button>
     </div>
     <div id="stock-entries-list"></div>
+    <!-- View Stock Ledger button -->
+    <div id="stock-ledger-toggle-wrap" style="margin-top:12px;">
+      <button class="btn btn-secondary" style="width:100%;" onclick="toggleStockLedger()">📊 View Stock Ledger</button>
+    </div>
+    <!-- Ledger panel — hidden by default -->
+    <div id="stock-ledger-panel" style="display:none;margin-top:12px;">
+      <!-- Date navigation -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">📅</div>
+        <input type="date" id="stock-date-picker" style="flex:1;margin-bottom:0;padding:7px 10px;font-size:13px;" onchange="stockPickDate(this.value)">
+        <button class="btn btn-sm btn-primary" onclick="stockGoToday()">Today</button>
+      </div>
+      <!-- Sort + Print controls -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="font-size:12px;color:var(--text-secondary);">Sort:</div>
+        <button class="btn btn-sm" id="sort-alpha-btn" onclick="setStockSort('alpha')" style="background:var(--blue);color:#fff;border:none;font-size:11px;">A→Z</button>
+        <button class="btn btn-sm btn-secondary" id="sort-high-btn" onclick="setStockSort('high')" style="font-size:11px;">High→Low</button>
+        <button class="btn btn-sm btn-secondary" id="sort-low-btn" onclick="setStockSort('low')" style="font-size:11px;">Low→High</button>
+        <button class="btn btn-sm btn-secondary no-print" style="margin-left:auto;font-size:11px;" onclick="printStockStatement()">🖨️ Print</button>
+      </div>
+      <!-- Stock ledger -->
+      <div class="card" id="stock-ledger-card">
+        <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Stock Ledger — <span id="stock-date-label"></span></div>
+        <div id="stock-ledger"></div>
+      </div>
+      <button class="btn btn-secondary" style="width:100%;margin-top:8px;" onclick="toggleStockLedger()">▲ Hide Ledger</button>
+    </div>
   </div>
 </div>
 
@@ -1950,12 +1958,27 @@ function renderTodayProdEntries(){
   }).join('');
 }
 
-function stockPickDate(val){if(val){stockViewDate=val;renderStockDashboard();}}
+function toggleStockLedger(){
+  var panel=document.getElementById('stock-ledger-panel');
+  if(!panel)return;
+  var isHidden=panel.style.display==='none';
+  panel.style.display=isHidden?'':'none';
+  if(isHidden){
+    // Initialise date picker and render when opening
+    var dp=document.getElementById('stock-date-picker');
+    if(dp)dp.value=stockViewDate;
+    renderStockLedger();
+    // Scroll to ledger
+    setTimeout(function(){panel.scrollIntoView({behavior:'smooth',block:'start'});},100);
+  }
+}
+
+function stockPickDate(val){if(val){stockViewDate=val;renderStockLedger();}}
 function stockGoToday(){
   stockViewDate=new Date().toISOString().split('T')[0];
   var dp=document.getElementById('stock-date-picker');
   if(dp)dp.value=stockViewDate;
-  renderStockDashboard();
+  renderStockLedger();
 }
 function setStockSort(order){
   stockSortOrder=order;
@@ -1977,23 +2000,26 @@ function renderStockDashboard(){
   var today=new Date().toISOString().split('T')[0];
   var dl=document.getElementById('stock-date-label');
   if(dl)dl.textContent=stockViewDate+(stockViewDate===today?' (Today)':'');
-  var dp=document.getElementById('stock-date-picker');
-  if(dp)dp.value=stockViewDate;
+
+  // Always reset ledger panel to hidden when re-entering stock home
+  var ledgerPanel=document.getElementById('stock-ledger-panel');
+  if(ledgerPanel)ledgerPanel.style.display='none';
 
   // Admin actions
   var aa=document.getElementById('stock-admin-actions');
   if(aa&&isAdmin()){
-    aa.innerHTML='<div style="display:flex;gap:8px;margin-bottom:8px;">'+
-      '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
-      '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
-    '</div>'+
-    '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
+    aa.innerHTML=
+      '<div style="display:flex;gap:8px;margin-bottom:8px;">'+
+        '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
+        '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
+      '</div>'+
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa&&isAccounts()){
-    aa.innerHTML='<button class="btn btn-primary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
-    '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
+    aa.innerHTML=
+      '<button class="btn btn-primary no-print" style="width:100%;margin-bottom:8px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa){aa.innerHTML='';}
 
-  renderStockLedger();
   renderStockEntries();
 }
 
