@@ -484,14 +484,6 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div id="stock-dashboard" style="display:none;">
     <!-- Admin actions — shown immediately at top -->
     <div id="stock-admin-actions"></div>
-    <!-- Production entries list — admin can edit/delete any entry -->
-    <div id="stock-prod-section" style="display:none;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Production Entries</div>
-        <button class="btn btn-sm btn-secondary" onclick="toggleProdSection()">▲ Hide</button>
-      </div>
-      <div id="stock-entries-list"></div>
-    </div>
     <!-- View Stock Ledger button -->
     <div id="stock-ledger-toggle-wrap" style="margin-top:12px;">
       <button class="btn btn-secondary" style="width:100%;" onclick="toggleStockLedger()">📊 View Stock Ledger</button>
@@ -524,7 +516,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 
 <!-- ADD PRODUCTION (Stock) -->
 <div class="screen" id="screen-add-production-stock">
-  <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
+  <div class="nav-back" onclick="editFromReport?(editFromReport=false,goTo('screen-contractor-report')):goToStock()">&#8592; Back</div>
   <div class="page-title">Add Production</div>
   <div class="page-sub" id="prod-date-sub">Entry for today</div>
   <div class="card">
@@ -1732,6 +1724,7 @@ var stockCurrentTab='production';
 var prodStockSKUs=[{skuId:'',qty:''}];
 var stockSortOrder='alpha'; // 'alpha', 'high', 'low'
 var editingProdId=null;
+var editFromReport=false;
 
 function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
 function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
@@ -2016,19 +2009,12 @@ function renderStockDashboard(){
         '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
         '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
       '</div>'+
-      '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
-        '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Report</button>'+
-        '<button class="btn btn-secondary no-print" style="flex:1;" onclick="toggleProdSection()">📋 Manage Entries</button>'+
-      '</div>';
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa&&isAccounts()){
     aa.innerHTML=
       '<button class="btn btn-primary no-print" style="width:100%;margin-bottom:8px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
       '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa){aa.innerHTML='';}
-
-  // Always hide prod section on fresh load
-  var ps=document.getElementById('stock-prod-section');
-  if(ps)ps.style.display='none';
 }
 
 function toggleProdSection(){
@@ -2186,6 +2172,9 @@ function editProdEntry(id){
   var entry=loadProdEntries().find(function(e){return e.id===id;});
   if(!entry)return;
   editingProdId=id;
+  // Check which screen we're on — contractor report or stock home
+  var curScreen=document.querySelector('.screen.active');
+  editFromReport=curScreen&&curScreen.id==='screen-contractor-report';
   goTo('screen-add-production-stock');
   setTimeout(function(){
     var pageTitle=document.querySelector('#screen-add-production-stock .page-title');
@@ -2306,7 +2295,13 @@ function saveProdStockEntry(){
     addPQ('prod_entry',entry.id);
   }
   editingProdId=null;
-  goToStock();
+  if(editFromReport){
+    editFromReport=false;
+    goTo('screen-contractor-report');
+    setTimeout(function(){renderContractorReport();},100);
+  } else {
+    goToStock();
+  }
 }
 
 function deleteProdEntry(id){
@@ -2709,13 +2704,30 @@ function buildCrDaywise(entries,skus){
           return sk?sk.name+': <b>'+item.qty+'</b> '+sk.unit:'';
         }).filter(Boolean).join(' · ');
         return '<div style="background:var(--bg-secondary);border-radius:6px;padding:8px 10px;margin-bottom:4px;font-size:12px;">'+
-          '<div style="font-weight:600;">'+e.contractor+
-            ' <span class="badge '+(e.shift==='day'?'badge-day':'badge-night')+'">'+(e.shift==='day'?'☀️ Day':'🌙 Night')+'</span></div>'+
-          '<div style="color:var(--text-secondary);margin-top:3px;">'+skuText+'</div>'+
+          '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
+            '<div style="flex:1;min-width:0;">'+
+              '<div style="font-weight:600;">'+e.contractor+
+                ' <span class="badge '+(e.shift==='day'?'badge-day':'badge-night')+'">'+(e.shift==='day'?'☀️ Day':'🌙 Night')+'</span></div>'+
+              '<div style="color:var(--text-secondary);margin-top:3px;">'+skuText+'</div>'+
+            '</div>'+
+            '<div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">'+
+              '<button class="icon-btn" style="width:28px;height:28px;font-size:13px;" onclick="editProdEntry(\''+e.id+'\')">✏️</button>'+
+              '<button class="icon-btn del" style="width:28px;height:28px;font-size:13px;" onclick="deleteProdEntryFromReport(\''+e.id+'\')">🗑️</button>'+
+            '</div>'+
+          '</div>'+
         '</div>';
       }).join('')+
     '</div>';
   }).join('');
+}
+
+function deleteProdEntryFromReport(id){
+  showModal('Delete Entry','Delete this production entry?',function(){
+    saveProdEntries(loadProdEntries().filter(function(e){return e.id!==id;}));
+    if(fbOK&&isOnline&&window._fb&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(id);
+    // Re-generate the report to reflect the deletion
+    renderContractorReport();
+  });
 }
 
 function buildRateInputs(skuRows){
