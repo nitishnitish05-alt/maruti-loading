@@ -484,12 +484,6 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div id="stock-dashboard" style="display:none;">
     <!-- Admin actions — shown immediately at top -->
     <div id="stock-admin-actions"></div>
-    <!-- Tab bar for entries -->
-    <div class="tab-bar">
-      <button class="tab active" id="stock-tab-prod" onclick="stockTab('production',this)">Production</button>
-      <button class="tab" id="stock-tab-dispatch" onclick="stockTab('dispatch',this)">Dispatched</button>
-    </div>
-    <div id="stock-entries-list"></div>
     <!-- View Stock Ledger button -->
     <div id="stock-ledger-toggle-wrap" style="margin-top:12px;">
       <button class="btn btn-secondary" style="width:100%;" onclick="toggleStockLedger()">📊 View Stock Ledger</button>
@@ -2020,8 +2014,6 @@ function renderStockDashboard(){
       '<button class="btn btn-primary no-print" style="width:100%;margin-bottom:8px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
       '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa){aa.innerHTML='';}
-
-  renderStockEntries();
 }
 
 function renderStockLedger(){
@@ -2264,8 +2256,8 @@ function saveProdStockEntry(){
 
   var all=loadProdEntries();
   var origEntry=editingProdId?all.find(function(e){return e.id===editingProdId;}):null;
-  // If editing, preserve original id and createdBy; otherwise create new
   var entryId=editingProdId||('PE'+Date.now());
+  // Remove old entry locally (same ID will be re-added below)
   if(editingProdId)all=all.filter(function(e){return e.id!==editingProdId;});
 
   var entry={
@@ -2282,7 +2274,7 @@ function saveProdStockEntry(){
   all.push(entry);
   saveProdEntries(all);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveProdEntry){
-    if(editingProdId&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(editingProdId);
+    // Just overwrite with same ID — no delete needed, avoids race condition
     window._fb.saveProdEntry(entry);
   } else {
     addPQ('prod_entry',entry.id);
