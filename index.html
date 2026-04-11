@@ -484,6 +484,14 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div id="stock-dashboard" style="display:none;">
     <!-- Admin actions — shown immediately at top -->
     <div id="stock-admin-actions"></div>
+    <!-- Production entries list — admin can edit/delete any entry -->
+    <div id="stock-prod-section" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">Production Entries</div>
+        <button class="btn btn-sm btn-secondary" onclick="toggleProdSection()">▲ Hide</button>
+      </div>
+      <div id="stock-entries-list"></div>
+    </div>
     <!-- View Stock Ledger button -->
     <div id="stock-ledger-toggle-wrap" style="margin-top:12px;">
       <button class="btn btn-secondary" style="width:100%;" onclick="toggleStockLedger()">📊 View Stock Ledger</button>
@@ -2008,12 +2016,32 @@ function renderStockDashboard(){
         '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
         '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
       '</div>'+
-      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
+      '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+        '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Report</button>'+
+        '<button class="btn btn-secondary no-print" style="flex:1;" onclick="toggleProdSection()">📋 Manage Entries</button>'+
+      '</div>';
+    // Render entries (hidden by default, shown when toggled)
+    renderStockEntries();
   } else if(aa&&isAccounts()){
     aa.innerHTML=
       '<button class="btn btn-primary no-print" style="width:100%;margin-bottom:8px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
       '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
   } else if(aa){aa.innerHTML='';}
+
+  // Always hide prod section on fresh load
+  var ps=document.getElementById('stock-prod-section');
+  if(ps)ps.style.display='none';
+}
+
+function toggleProdSection(){
+  var ps=document.getElementById('stock-prod-section');
+  if(!ps)return;
+  var isHidden=ps.style.display==='none';
+  ps.style.display=isHidden?'':'none';
+  if(isHidden){
+    renderStockEntries();
+    setTimeout(function(){ps.scrollIntoView({behavior:'smooth',block:'start'});},100);
+  }
 }
 
 function renderStockLedger(){
