@@ -743,15 +743,16 @@ async function pullCloud(){
     if(window._fb.loadProdEntries){
       const cp=await window._fb.loadProdEntries();
       if(cp){
-        // Merge by ID — local version wins if newer (has updatedAt)
+        const deletedProd=getDeletedProd();
         const local=loadProdEntries();
         const merged={};
-        cp.forEach(function(e){merged[e.id]=e;});
-        // Local entries override cloud if they have a newer updatedAt
+        cp.forEach(function(e){if(deletedProd.indexOf(e.id)<0)merged[e.id]=e;});
         local.forEach(function(e){
-          if(!merged[e.id]||((e.updatedAt||e.createdAt)>(merged[e.id].updatedAt||merged[e.id].createdAt))){
-            merged[e.id]=e;
-          }
+          if(deletedProd.indexOf(e.id)>=0)return;
+          var cloudVer=merged[e.id];
+          var localTime=e.updatedAt||e.createdAt||'';
+          var cloudTime=cloudVer?(cloudVer.updatedAt||cloudVer.createdAt||''):'';
+          if(!cloudVer||localTime>cloudTime)merged[e.id]=e;
         });
         SS(SK.PROD_ENTRIES,Object.values(merged));
       }
@@ -1741,6 +1742,8 @@ var editFromReport=false;
 
 function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
 function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
+function getDeletedProd(){try{return JSON.parse(localStorage.getItem('ms_deleted_prod'))||[];}catch(e){return[];}}
+function addDeletedProd(id){var d=getDeletedProd();if(d.indexOf(id)<0){d.push(id);localStorage.setItem('ms_deleted_prod',JSON.stringify(d));}}
 function loadOpeningStock(){return LS(SK.OPENING)||{};}
 function saveOpeningStockData(o){
   SS(SK.OPENING,o);
@@ -1939,11 +1942,12 @@ function renderStockHome(){
         window._fb.loadContractors&&window._fb.loadContractors().then(function(r){if(r)SS(SK.CONTRACTORS,r);}),
         window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(cloudEntries){
           if(!cloudEntries)return;
-          // Merge by ID — local wins if newer, prevents stale cloud overwriting recent edits
+          var deletedProd=getDeletedProd();
           var local=loadProdEntries();
           var merged={};
-          cloudEntries.forEach(function(e){merged[e.id]=e;});
+          cloudEntries.forEach(function(e){if(deletedProd.indexOf(e.id)<0)merged[e.id]=e;});
           local.forEach(function(e){
+            if(deletedProd.indexOf(e.id)>=0)return;
             var cloudVer=merged[e.id];
             var localTime=e.updatedAt||e.createdAt||'';
             var cloudTime=cloudVer?(cloudVer.updatedAt||cloudVer.createdAt||''):'';
@@ -2297,12 +2301,15 @@ function saveProdStockEntry(){
 
   var all=loadProdEntries();
   var origEntry=editingProdId?all.find(function(e){return e.id===editingProdId;}):null;
-  var entryId=editingProdId||('PE'+Date.now());
-  // Remove old entry locally (same ID will be re-added below)
-  if(editingProdId)all=all.filter(function(e){return e.id!==editingProdId;});
+  var oldId=editingProdId;
+
+  // Always create fresh ID — avoids any Firebase update confusion
+  var newId='PE'+Date.now();
+  // Remove old entry from local storage
+  if(oldId)all=all.filter(function(e){return e.id!==oldId;});
 
   var entry={
-    id:entryId,
+    id:newId,
     date:entryDate,
     contractor:cName,
     contractorId:cId,
@@ -2314,16 +2321,22 @@ function saveProdStockEntry(){
   };
   all.push(entry);
   saveProdEntries(all);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveProdEntry){
-    // Just overwrite with same ID — no delete needed, avoids race condition
-    window._fb.saveProdEntry(entry);
+
+  // Add old ID to a deleted blacklist so pullCloud never re-adds it
+  if(oldId)addDeletedProd(oldId);
+
+  if(fbOK&&isOnline&&window._fb){
+    // Explicitly delete old document from Firestore
+    if(oldId&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(oldId);
+    // Save new document
+    if(window._fb.saveProdEntry)window._fb.saveProdEntry(entry);
   } else {
     addPQ('prod_entry',entry.id);
   }
+
   editingProdId=null;
   var wasFromReport=editFromReport;
   editFromReport=false;
-  // Wait for Firebase set() to complete before navigating — prevents stale pull overwriting the edit
   setTimeout(function(){
     if(wasFromReport){
       goTo('screen-contractor-report');
@@ -2331,7 +2344,7 @@ function saveProdStockEntry(){
     } else {
       goToStock();
     }
-  },800);
+  },400);
 }
 
 function deleteProdEntry(id){
