@@ -741,7 +741,20 @@ async function pullCloud(){
       const cc=await window._fb.loadContractors();if(cc)SS(SK.CONTRACTORS,cc);
     }
     if(window._fb.loadProdEntries){
-      const cp=await window._fb.loadProdEntries();if(cp)SS(SK.PROD_ENTRIES,cp);
+      const cp=await window._fb.loadProdEntries();
+      if(cp){
+        // Merge by ID — local version wins if newer (has updatedAt)
+        const local=loadProdEntries();
+        const merged={};
+        cp.forEach(function(e){merged[e.id]=e;});
+        // Local entries override cloud if they have a newer updatedAt
+        local.forEach(function(e){
+          if(!merged[e.id]||((e.updatedAt||e.createdAt)>(merged[e.id].updatedAt||merged[e.id].createdAt))){
+            merged[e.id]=e;
+          }
+        });
+        SS(SK.PROD_ENTRIES,Object.values(merged));
+      }
     }
     if(window._fb.loadOpeningStock){
       const co=await window._fb.loadOpeningStock();if(co)SS(SK.OPENING,co);
@@ -2295,13 +2308,17 @@ function saveProdStockEntry(){
     addPQ('prod_entry',entry.id);
   }
   editingProdId=null;
-  if(editFromReport){
-    editFromReport=false;
-    goTo('screen-contractor-report');
-    setTimeout(function(){renderContractorReport();},100);
-  } else {
-    goToStock();
-  }
+  var wasFromReport=editFromReport;
+  editFromReport=false;
+  // Small delay so Firebase set() completes before pullCloud runs on navigation
+  setTimeout(function(){
+    if(wasFromReport){
+      goTo('screen-contractor-report');
+      setTimeout(function(){renderContractorReport();},150);
+    } else {
+      goToStock();
+    }
+  },300);
 }
 
 function deleteProdEntry(id){
