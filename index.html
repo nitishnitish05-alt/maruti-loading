@@ -1729,6 +1729,7 @@ var stockViewDate=new Date().toISOString().split('T')[0];
 var stockCurrentTab='production';
 var prodStockSKUs=[{skuId:'',qty:''}];
 var stockSortOrder='alpha'; // 'alpha', 'high', 'low'
+var editingProdId=null;
 
 function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
 function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
@@ -2078,23 +2079,34 @@ function renderStockEntries(){
   if(!el)return;
   var skus=loadSKUsLocal();
   if(stockCurrentTab==='production'){
-    var entries=loadProdEntries().filter(function(e){return e.date===stockViewDate;});
-    if(!entries.length){el.innerHTML='<div class="empty-state">No production entries for this date.</div>';return;}
-    el.innerHTML=entries.slice().reverse().map(function(e){
+    // Admin sees all dates with a filter; others see only stockViewDate
+    var entries=loadProdEntries();
+    if(!isAdmin()){
+      entries=entries.filter(function(e){return e.date===stockViewDate;});
+    } else {
+      // For admin: sort by date desc, show date label on each card
+      entries=entries.slice().sort(function(a,b){return b.date.localeCompare(a.date);});
+    }
+    if(!entries.length){el.innerHTML='<div class="empty-state">No production entries'+(isAdmin()?'.':' for this date.')+'</div>';return;}
+    el.innerHTML=entries.map(function(e){
       var skuText=e.items.map(function(item){
         var sk=skus.find(function(s){return s.id==item.skuId;});
         return sk?sk.name+': <b>'+item.qty+'</b> '+sk.unit:'';
       }).filter(Boolean).join(' · ');
-      var canDel=isAdmin();
       return '<div class="card" style="margin-bottom:8px;">'+
         '<div style="display:flex;justify-content:space-between;align-items:flex-start;">'+
-          '<div>'+
+          '<div style="flex:1;min-width:0;">'+
+            (isAdmin()?'<div style="font-size:11px;color:var(--blue);font-weight:600;margin-bottom:3px;">'+e.date+'</div>':'')+
             '<div style="font-size:14px;font-weight:600;">'+e.contractor+
               ' <span class="badge '+(e.shift==='day'?'badge-day':'badge-night')+'">'+(e.shift==='day'?'☀️ Day':'🌙 Night')+'</span></div>'+
             '<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">by '+e.createdBy+'</div>'+
             '<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">'+skuText+'</div>'+
           '</div>'+
-          (canDel?'<button class="icon-btn del" onclick="deleteProdEntry(\''+e.id+'\')">🗑️</button>':'')+
+          (isAdmin()?
+            '<div style="display:flex;gap:4px;flex-shrink:0;margin-left:8px;">'+
+              '<button class="icon-btn" onclick="editProdEntry(\''+e.id+'\')">✏️</button>'+
+              '<button class="icon-btn del" onclick="deleteProdEntry(\''+e.id+'\')">🗑️</button>'+
+            '</div>':'')+
         '</div>'+
       '</div>';
     }).join('');
@@ -2127,19 +2139,20 @@ function renderStockEntries(){
 
 // ── Production Entry Form ─────────────────────────────────────
 function initProdStockForm(){
+  editingProdId=null;
   var today=new Date().toISOString().split('T')[0];
-  // Admin can pick any date, production locked to today
-  var dateWrap=document.getElementById('prod-date-field-wrap');
   var dateSub=document.getElementById('prod-date-sub');
+  var pageTitle=document.querySelector('#screen-add-production-stock .page-title');
+  if(pageTitle)pageTitle.textContent='Add Production';
+  if(dateSub)dateSub.textContent=isAdmin()?'Entry for any date':'Entry for today — '+today;
+  var dateWrap=document.getElementById('prod-date-field-wrap');
   if(isAdmin()){
     if(dateWrap)dateWrap.style.display='';
     var di=document.getElementById('prod-entry-date');
     if(di)di.value=stockViewDate;
   } else {
     if(dateWrap)dateWrap.style.display='none';
-    if(dateSub)dateSub.textContent='Entry for today — '+today;
   }
-  // Populate contractors
   var contractors=loadContractors();
   var sel=document.getElementById('prod-contractor-stock');
   if(sel){
@@ -2149,6 +2162,39 @@ function initProdStockForm(){
   document.getElementById('prod-shift-stock').value='';
   prodStockSKUs=[{skuId:'',qty:''}];
   renderProdStockSKUs();
+}
+
+function editProdEntry(id){
+  var entry=loadProdEntries().find(function(e){return e.id===id;});
+  if(!entry)return;
+  editingProdId=id;
+  goTo('screen-add-production-stock');
+  setTimeout(function(){
+    var pageTitle=document.querySelector('#screen-add-production-stock .page-title');
+    if(pageTitle)pageTitle.textContent='Edit Production Entry';
+    var dateSub=document.getElementById('prod-date-sub');
+    if(dateSub)dateSub.textContent='Editing entry for '+entry.date;
+    var dateWrap=document.getElementById('prod-date-field-wrap');
+    if(dateWrap)dateWrap.style.display='';
+    var di=document.getElementById('prod-entry-date');
+    if(di)di.value=entry.date;
+    var contractors=loadContractors();
+    var sel=document.getElementById('prod-contractor-stock');
+    if(sel){
+      sel.innerHTML='<option value="">Select contractor...</option>'+
+        contractors.map(function(c){return '<option value="'+c.id+'">'+c.name+'</option>';}).join('');
+      sel.value=entry.contractorId||'';
+      // If contractorId not found, try matching by name
+      if(!sel.value&&entry.contractor){
+        var matchC=contractors.find(function(c){return c.name===entry.contractor;});
+        if(matchC)sel.value=matchC.id;
+      }
+    }
+    var sh=document.getElementById('prod-shift-stock');
+    if(sh)sh.value=entry.shift||'';
+    prodStockSKUs=entry.items.map(function(item){return{skuId:item.skuId,qty:item.qty};});
+    renderProdStockSKUs();
+  },100);
 }
 
 function renderProdStockSKUs(){
@@ -2201,7 +2247,6 @@ function addProdStockSKU(){prodStockSKUs.push({skuId:'',qty:''});renderProdStock
 function removeProdStockSKU(i){if(prodStockSKUs.length>1){prodStockSKUs.splice(i,1);renderProdStockSKUs();}}
 
 function saveProdStockEntry(){
-  var contractors=loadContractors();
   var cSel=document.getElementById('prod-contractor-stock');
   var cId=cSel?cSel.value:'';
   var cName=cSel&&cSel.selectedIndex>=0?cSel.options[cSel.selectedIndex].text:'';
@@ -2217,22 +2262,32 @@ function saveProdStockEntry(){
     if(di&&di.value)entryDate=di.value;
   }
 
+  var all=loadProdEntries();
+  var origEntry=editingProdId?all.find(function(e){return e.id===editingProdId;}):null;
+  // If editing, preserve original id and createdBy; otherwise create new
+  var entryId=editingProdId||('PE'+Date.now());
+  if(editingProdId)all=all.filter(function(e){return e.id!==editingProdId;});
+
   var entry={
-    id:'PE'+Date.now(),
+    id:entryId,
     date:entryDate,
     contractor:cName,
     contractorId:cId,
     shift:shift,
     items:items.map(function(s){return{skuId:parseInt(s.skuId)||s.skuId,qty:parseFloat(s.qty)};}),
-    createdBy:CU.username,
-    createdAt:new Date().toISOString()
+    createdBy:origEntry?origEntry.createdBy:CU.username,
+    createdAt:origEntry?origEntry.createdAt:new Date().toISOString(),
+    updatedAt:new Date().toISOString()
   };
-  var all=loadProdEntries();all.push(entry);saveProdEntries(all);
+  all.push(entry);
+  saveProdEntries(all);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveProdEntry){
+    if(editingProdId&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(editingProdId);
     window._fb.saveProdEntry(entry);
   } else {
     addPQ('prod_entry',entry.id);
   }
+  editingProdId=null;
   goToStock();
 }
 
