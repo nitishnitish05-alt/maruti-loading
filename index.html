@@ -2020,8 +2020,6 @@ function renderStockDashboard(){
         '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Report</button>'+
         '<button class="btn btn-secondary no-print" style="flex:1;" onclick="toggleProdSection()">📋 Manage Entries</button>'+
       '</div>';
-    // Render entries (hidden by default, shown when toggled)
-    renderStockEntries();
   } else if(aa&&isAccounts()){
     aa.innerHTML=
       '<button class="btn btn-primary no-print" style="width:100%;margin-bottom:8px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
