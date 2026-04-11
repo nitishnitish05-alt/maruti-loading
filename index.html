@@ -1937,7 +1937,20 @@ function renderStockHome(){
     if(fbOK&&isOnline&&window._fb){
       Promise.all([
         window._fb.loadContractors&&window._fb.loadContractors().then(function(r){if(r)SS(SK.CONTRACTORS,r);}),
-        window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(r){if(r)SS(SK.PROD_ENTRIES,r);}),
+        window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(cloudEntries){
+          if(!cloudEntries)return;
+          // Merge by ID — local wins if newer, prevents stale cloud overwriting recent edits
+          var local=loadProdEntries();
+          var merged={};
+          cloudEntries.forEach(function(e){merged[e.id]=e;});
+          local.forEach(function(e){
+            var cloudVer=merged[e.id];
+            var localTime=e.updatedAt||e.createdAt||'';
+            var cloudTime=cloudVer?(cloudVer.updatedAt||cloudVer.createdAt||''):'';
+            if(!cloudVer||localTime>cloudTime)merged[e.id]=e;
+          });
+          SS(SK.PROD_ENTRIES,Object.values(merged));
+        }),
         window._fb.loadOpeningStock&&window._fb.loadOpeningStock().then(function(r){if(r)SS(SK.OPENING,r);}),
       ]).then(function(){renderStockDashboard();}).catch(function(){renderStockDashboard();});
     } else {
@@ -2310,15 +2323,15 @@ function saveProdStockEntry(){
   editingProdId=null;
   var wasFromReport=editFromReport;
   editFromReport=false;
-  // Small delay so Firebase set() completes before pullCloud runs on navigation
+  // Wait for Firebase set() to complete before navigating — prevents stale pull overwriting the edit
   setTimeout(function(){
     if(wasFromReport){
       goTo('screen-contractor-report');
-      setTimeout(function(){renderContractorReport();},150);
+      setTimeout(function(){renderContractorReport();},200);
     } else {
       goToStock();
     }
-  },300);
+  },800);
 }
 
 function deleteProdEntry(id){
