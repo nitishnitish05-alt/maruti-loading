@@ -1211,8 +1211,28 @@ function deleteUser(id){showModal('Remove user','Remove this user? They will no 
 function renderSKUs(){
   const skus=loadSKUs();
   document.getElementById('sku-list').innerHTML=skus.length
-    ?skus.map(sk=>`<div class="sku-row"><div><div style="font-size:14px;font-weight:600;">${sk.name}</div><div style="font-size:12px;color:var(--text-secondary);">${sk.unit}</div></div><button class="btn btn-sm btn-danger" onclick="deleteSKU(${sk.id})">Remove</button></div>`).join('')
+    ?skus.map(sk=>{
+      const dis=sk.disabled||false;
+      return `<div class="sku-row" style="${dis?'opacity:0.5;':''}">
+        <div>
+          <div style="font-size:14px;font-weight:600;">${sk.name}${dis?' <span style="font-size:11px;color:#e17055;font-weight:400;">[Disabled]</span>':''}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${sk.unit}</div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm" style="${dis?'background:#27ae60;color:#fff;':'background:#e17055;color:#fff;'}" onclick="toggleSKU(${sk.id})">${dis?'Enable':'Disable'}</button>
+          <button class="btn btn-sm btn-danger" onclick="deleteSKU(${sk.id})">Remove</button>
+        </div>
+      </div>`;
+    }).join('')
     :'<div style="font-size:13px;color:var(--text-secondary);">No SKUs yet.</div>';
+}
+function toggleSKU(id){
+  const skus=loadSKUs();
+  const sk=skus.find(s=>s.id===id);
+  if(!sk)return;
+  sk.disabled=!(sk.disabled||false);
+  saveSKUs(skus);
+  renderSKUs();
 }
 function addSKU(){
   const name=document.getElementById('new-sku-name').value.trim(),unit=document.getElementById('new-sku-unit').value.trim();
@@ -1278,7 +1298,12 @@ function saveEditSession(){
   s.driver=document.getElementById('es-driver').value.trim();s.incharge=document.getElementById('es-incharge').value.trim();
   s.dest=document.getElementById('es-dest').value.trim();
   if(!s.truck||!s.driver){alert('Truck number and driver name required.');return;}
-  saveSess(s);editSessId=null;goTo('screen-home');
+  s.synced=false;
+  saveSess(s);
+  if(fbOK&&isOnline&&window._fb){
+    window._fb.saveSession(s).catch(function(){addPQ('session',s.id);});
+  } else { addPQ('session',s.id); }
+  editSessId=null;goTo('screen-home');
 }
 function selectTruck(type){
   truckType=type;
@@ -1418,7 +1443,8 @@ function skuSearch(inp, ri, ei){
   var skus = loadSKUs();
   var list = document.getElementById('sku-list-'+ri+'-'+ei);
   if(!list) return;
-  var matches = q.length===0 ? skus : skus.filter(function(sk){return sk.name.toLowerCase().indexOf(q)>=0;});
+  var activeskus = skus.filter(function(sk){return !sk.disabled;});
+  var matches = q.length===0 ? activeskus : activeskus.filter(function(sk){return sk.name.toLowerCase().indexOf(q)>=0;});
   if(!matches.length){
     list.innerHTML='<div class="sku-ac-empty">No SKU found</div>';
     list.style.display='block'; return;
