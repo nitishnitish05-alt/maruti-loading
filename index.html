@@ -692,7 +692,10 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <div id="fl-date-panel" style="display:none;">
       <div class="card" style="margin-bottom:12px;">
         <div class="field-label">Select date</div>
-        <input type="date" id="fl-date-input" onchange="searchDateLedger()">
+        <div style="display:flex;gap:8px;">
+          <input type="date" id="fl-date-input" onchange="searchDateLedger()" style="flex:1;">
+          <button class="btn btn-primary btn-sm" onclick="searchDateLedger()">Search</button>
+        </div>
       </div>
       <div id="fl-date-result"></div>
     </div>
@@ -3206,6 +3209,7 @@ function switchLedgerView(view){
   document.getElementById('fl-date-panel').style.display=view==='date'?'block':'none';
   document.getElementById('fl-by-truck-btn').className='tab'+(view==='truck'?' active':'');
   document.getElementById('fl-by-date-btn').className='tab'+(view==='date'?' active':'');
+  if(view==='date'&&document.getElementById('fl-date-input').value) searchDateLedger();
 }
 
 // ═══════════════════════════════════════════════════════
