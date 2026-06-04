@@ -779,7 +779,7 @@ try {
 const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1',FREIGHT_ENTRIES:'tl_freight_m1',FREIGHT_PAYMENTS:'tl_freight_pay_m1'};
 let CU=null,curSessId=null,homeFilter='active',truckType='small';
 let sortOrder='desc'; // 'desc' = newest first, 'asc' = oldest first
-let pendingModal=null,editSessId=null,elTimer=null;
+let pendingModal=null,editSessId=null,elTimer=null,editFromLoading=false;
 let editRowIdx=-1,liveRows=[],editRowSnap=null;
 let editUserId=null,fbListener=null;
 let isOnline=navigator.onLine,fbOK=false;
@@ -1078,6 +1078,7 @@ function goTo(s){
   if(s==='screen-opening-stock')initOpeningStockForm();
   if(s==='screen-contractor-report')initContractorReport();
   if(s==='screen-freight')initFreightScreen();
+  if(s==='screen-new-session')initNewSession();
 }
 function goToStock(){goTo('screen-stock-home');}
 
@@ -1290,7 +1291,7 @@ function renderHome(){
       </div>
       <div class="session-actions">
         <span class="badge ${s.done?'badge-done':'badge-active-s'}">${s.done?'Done':'Active'}</span>
-        ${isAdmin()?`<button class="icon-btn" onclick="startEditSess('${s.id}')">✏️</button>`:''}
+        ${(!s.done||isAdmin())?`<button class="icon-btn" onclick="startEditSess('${s.id}')">✏️</button>`:''}
         ${isAdmin()?`<button class="icon-btn del" onclick="confirmDel('${s.id}','${s.truck}')">🗑️</button>`:''}
       </div>
     </div>`).join('');
@@ -1415,14 +1416,20 @@ function confirmDel(id,truck){
     }
   });
 }
-function startEditSess(id){
-  editSessId=id;const s=getSess(id);
-  document.getElementById('es-date').value=s.date||'';document.getElementById('es-truck').value=s.truck||'';
-  document.getElementById('es-driver').value=s.driver||'';document.getElementById('es-driver-mobile').value=s.driverMobile||'';
+function startEditSess(id,fromLoading){
+  var s=getSess(id);if(!s)return;
+  if(s.done&&!isAdmin()){alert('Only admin can edit completed sessions.');return;}
+  editSessId=id;editFromLoading=!!fromLoading;
+  document.getElementById('es-date').value=s.date||'';
+  document.getElementById('es-truck').value=autoFmtTruckVal(s.truck||'');
+  document.getElementById('es-driver').value=s.driver||'';
+  document.getElementById('es-driver-mobile').value=s.driverMobile||'';
   document.getElementById('es-incharge').value=s.incharge||'';
-  document.getElementById('es-dest').value=s.dest||'';document.getElementById('es-truck-err').style.display='none';goTo('screen-edit-session');
+  document.getElementById('es-dest').value=s.dest||'';
+  document.getElementById('es-truck-err').style.display='none';
+  goTo('screen-edit-session');
 }
-function cancelEditSession(){editSessId=null;goTo('screen-home');}
+function cancelEditSession(){var fl=editFromLoading;editSessId=null;editFromLoading=false;if(fl){goTo('screen-loading');}else{goTo('screen-home');}}
 function saveEditSession(){
   const s=getSess(editSessId);
   s.date=document.getElementById('es-date').value;
@@ -1441,7 +1448,8 @@ function saveEditSession(){
   if(fbOK&&isOnline&&window._fb){
     window._fb.saveSession(s).catch(function(){addPQ('session',s.id);});
   } else { addPQ('session',s.id); }
-  editSessId=null;goTo('screen-home');
+  var fl=editFromLoading;editSessId=null;editFromLoading=false;
+  if(fl){liveRows=clone(getSess(curSessId).rowData);renderLoading(curSessId);goTo('screen-loading');startAutoSave();}else{goTo('screen-home');}
 }
 function selectTruck(type){
   truckType=type;
@@ -1498,29 +1506,11 @@ function renderLoading(id){
     <div class="card no-print">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div style="font-size:16px;font-weight:700;">${s.truck} <span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
-        <button class="btn btn-sm btn-secondary" onclick="toggleSessionEdit()" id="sess-edit-btn">✏️ Edit details</button>
+        <button class="btn btn-sm btn-secondary" onclick="startEditSess(curSessId,true)">✏️ Edit details</button>
       </div>
-      <!-- View mode -->
-      <div id="sess-view-mode">
-        <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
-        ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:'<div style="font-size:12px;color:var(--red);margin-top:2px;">⚠️ No destination set</div>'}
-        ${s.startTime?`<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Started: <b>${fmt12(s.startTime)}</b></div>`:''}
-      </div>
-      <!-- Edit mode (hidden by default) -->
-      <div id="sess-edit-mode" style="display:none;margin-top:8px;">
-        <div class="field-label">Truck number *</div>
-        <input type="text" id="le-truck" value="${s.truck}" placeholder="Truck number" style="margin-bottom:8px;">
-        <div class="field-label">Driver name *</div>
-        <input type="text" id="le-driver" value="${s.driver||''}" placeholder="Driver name" style="margin-bottom:8px;">
-        <div class="field-label">Loading incharge *</div>
-        <input type="text" id="le-incharge" value="${s.incharge||''}" placeholder="Loading incharge" style="margin-bottom:8px;">
-        <div class="field-label">Destination *</div>
-        <input type="text" id="le-dest" value="${s.dest||''}" placeholder="Destination" style="margin-bottom:8px;">
-        <div style="display:flex;gap:8px;">
-          <button class="btn btn-primary btn-sm" style="flex:1;" onclick="saveSessionEdit()">Save</button>
-          <button class="btn btn-secondary btn-sm" style="flex:1;" onclick="toggleSessionEdit()">Cancel</button>
-        </div>
-      </div>
+      <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
+      ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:'<div style="font-size:12px;color:var(--red);margin-top:2px;">⚠️ No destination set</div>'}
+      ${s.startTime?`<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Started: <b>${fmt12(s.startTime)}</b></div>`:''}
     </div>`;
   document.getElementById('elapsed-display').innerHTML=elHTML(s);
   startTimer(id);
@@ -1535,32 +1525,7 @@ function renderLoading(id){
   }).join('');
 }
 
-function toggleSessionEdit(){
-  var view=document.getElementById('sess-view-mode');
-  var edit=document.getElementById('sess-edit-mode');
-  var btn=document.getElementById('sess-edit-btn');
-  if(!view||!edit)return;
-  var isEditing=edit.style.display!=='none';
-  view.style.display=isEditing?'':'none';
-  edit.style.display=isEditing?'none':'';
-  if(btn)btn.textContent=isEditing?'✏️ Edit details':'Cancel';
-}
-
-function saveSessionEdit(){
-  var truck=document.getElementById('le-truck').value.trim();
-  var driver=document.getElementById('le-driver').value.trim();
-  var incharge=document.getElementById('le-incharge').value.trim();
-  var dest=document.getElementById('le-dest').value.trim();
-  if(!truck){alert('Truck number is required.');return;}
-  if(!driver){alert('Driver name is required.');return;}
-  if(!incharge){alert('Loading incharge is required.');return;}
-  if(!dest){alert('Destination is required.');return;}
-  var s=getSess(curSessId);
-  s.truck=truck;s.driver=driver;s.incharge=incharge;s.dest=dest;
-  saveSess(s);
-  cloudSaveProgress();
-  renderLoading(curSessId); // re-render with updated info
-}
+// inline edit replaced by screen-edit-session — toggleSessionEdit/saveSessionEdit removed
 function buildEntryHTML(e, ei, ri, skus){
   var selSku = skus.find(function(sk){return sk.id==e.skuId;});
   var displayVal = selSku ? selSku.name : '';
@@ -3110,7 +3075,7 @@ function deleteContractor(id){
 
 // Boot
 function boot(){
-  document.getElementById('ns-date').value=new Date().toISOString().split('T')[0];
+  // date set by initNewSession() via goTo
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   // Push initial history state so Android back button is intercepted from the start
   window.history.pushState({screen:'screen-login'},'','');
@@ -3129,6 +3094,28 @@ window.onerror = function(msg, src, line, col, err){
 // ═══════════════════════════════════════════════════════
 // VEHICLE NUMBER UTILITIES
 // ═══════════════════════════════════════════════════════
+
+// String version of truck formatter (no DOM element needed)
+function autoFmtTruckVal(raw){
+  raw=(raw||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  var r='',i=0;
+  var state=''; while(i<raw.length&&/[A-Z]/.test(raw[i])&&state.length<2){state+=raw[i];i++;} if(state)r+=state;
+  var dist='';  while(i<raw.length&&/[0-9]/.test(raw[i])&&dist.length<2){dist+=raw[i];i++;}   if(dist)r+=' '+dist;
+  var ser='';   while(i<raw.length&&/[A-Z]/.test(raw[i])&&ser.length<3){ser+=raw[i];i++;}     if(ser)r+=' '+ser;
+  var num='';   while(i<raw.length&&/[0-9]/.test(raw[i])&&num.length<4){num+=raw[i];i++;}     if(num)r+=' '+num;
+  return r;
+}
+
+// Returns today's date in IST as YYYY-MM-DD
+function getISTDate(){
+  return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
+}
+
+// Init new session screen with IST date
+function initNewSession(){
+  document.getElementById('ns-date').value=getISTDate();
+}
+
 function autoFmtTruck(el){
   var raw=el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
   var r='';
