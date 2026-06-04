@@ -86,6 +86,13 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 .admin-tabs { display: flex; gap: 4px; background: var(--bg-secondary); border-radius: var(--radius-md); padding: 4px; margin-bottom: 16px; }
 .admin-tab { flex: 1; padding: 7px; text-align: center; font-size: 13px; cursor: pointer; border-radius: 6px; color: var(--text-secondary); border: none; background: transparent; font-family: inherit; }
 .admin-tab.active { background: var(--bg-primary); color: var(--text-primary); font-weight: 600; border: 0.5px solid var(--border); }
+.field-error { font-size: 11px; color: var(--red); margin: -8px 0 8px; }
+.freight-summary { background: var(--bg-secondary); border-radius: var(--radius-md); padding: 12px 14px; margin-bottom: 12px; }
+.freight-trip { background: var(--bg-primary); border: 0.5px solid var(--border); border-radius: var(--radius-md); padding: 12px; margin-bottom: 8px; }
+.freight-trip.receipt-ok { border-left: 3px solid var(--green); }
+.freight-payment-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+.fbal-positive { color: var(--red); font-weight: 700; }
+.fbal-zero { color: var(--green); font-weight: 700; }
 
 /* Badges */
 .badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; display: inline-block; }
@@ -223,6 +230,31 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <div id="eu-msg" style="font-size:13px;text-align:center;margin-bottom:10px;min-height:18px;color:var(--text-secondary);"></div>
     <button class="btn btn-primary" onclick="saveEditUser()">Save changes</button>
     <button class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- FREIGHT EDIT MODAL -->
+<div class="modal-overlay" id="freight-edit-modal">
+  <div class="modal-box">
+    <div class="modal-title">Edit Freight Entry</div>
+    <div class="field-label">Destination</div>
+    <input type="text" id="fem-dest" placeholder="Destination">
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">Total Freight ₹</div><input type="number" id="fem-total" min="0" oninput="femCalcBalance()"></div>
+      <div><div class="field-label">Advance Paid ₹</div><input type="number" id="fem-advance" min="0" oninput="femCalcBalance()"></div>
+    </div>
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">Customer Payable ₹</div><input type="number" id="fem-customer" min="0" oninput="femCalcBalance()"></div>
+      <div><div class="field-label">Balance By Us ₹</div><input type="number" id="fem-balance" readonly style="background:#f5f5f5;color:var(--text-secondary);"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+      <input type="checkbox" id="fem-receipt" style="width:auto;">
+      <label for="fem-receipt" style="font-size:14px;">Receipt received</label>
+    </div>
+    <div class="field-label">Notes</div>
+    <input type="text" id="fem-notes" placeholder="Optional remarks">
+    <button class="btn btn-primary" onclick="saveFreightEdit()">Save changes</button>
+    <button class="btn btn-secondary" onclick="closeFreightEditModal()">Cancel</button>
   </div>
 </div>
 
@@ -380,9 +412,12 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="page-sub">Enter truck and driver details</div>
   <div class="card">
     <div class="field-label">Date</div><input type="date" id="ns-date">
+    <div class="field-label">Truck number *</div>
+    <input type="text" id="ns-truck" placeholder="e.g. UP 77 HA 2224" oninput="autoFmtTruck(this)" autocomplete="off" style="text-transform:uppercase;">
+    <div class="field-error" id="ns-truck-err" style="display:none;">Invalid format. Use: UP 77 HA 2224</div>
     <div class="inline-row" style="margin-bottom:0;">
-      <div><div class="field-label">Truck number</div><input type="text" id="ns-truck" placeholder="e.g. UP78AT0123"></div>
-      <div><div class="field-label">Driver name</div><input type="text" id="ns-driver" placeholder="e.g. Vivek Kumar"></div>
+      <div><div class="field-label">Driver name *</div><input type="text" id="ns-driver" placeholder="e.g. Vivek Kumar"></div>
+      <div><div class="field-label">Driver mobile</div><input type="number" id="ns-driver-mobile" placeholder="10-digit mobile"></div>
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="ns-incharge" placeholder="e.g. Ramesh Singh">
     <div class="field-label">Destination / Route</div><input type="text" id="ns-dest" placeholder="e.g. Lucknow Godown">
@@ -409,9 +444,12 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="page-title">Edit session details</div>
   <div class="card">
     <div class="field-label">Date</div><input type="date" id="es-date">
+    <div class="field-label">Truck number *</div>
+    <input type="text" id="es-truck" oninput="autoFmtTruck(this)" autocomplete="off" style="text-transform:uppercase;" placeholder="e.g. UP 77 HA 2224">
+    <div class="field-error" id="es-truck-err" style="display:none;">Invalid format. Use: UP 77 HA 2224</div>
     <div class="inline-row" style="margin-bottom:0;">
-      <div><div class="field-label">Truck number</div><input type="text" id="es-truck"></div>
-      <div><div class="field-label">Driver name</div><input type="text" id="es-driver"></div>
+      <div><div class="field-label">Driver name *</div><input type="text" id="es-driver"></div>
+      <div><div class="field-label">Driver mobile</div><input type="number" id="es-driver-mobile" placeholder="10-digit mobile"></div>
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="es-incharge">
     <div class="field-label">Destination / Route</div><input type="text" id="es-dest">
@@ -596,6 +634,73 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 
 </div>
 
+<!-- FREIGHT LEDGER SCREEN -->
+<div class="screen" id="screen-freight">
+  <div class="nav-back" onclick="goTo('screen-home')">&#8592; Back</div>
+  <div class="page-title">Freight Ledger</div>
+  <div class="tab-bar">
+    <button class="tab active" id="ft-tab-add" onclick="switchFreightTab('add')">+ Add Trip</button>
+    <button class="tab" id="ft-tab-ledger" onclick="switchFreightTab('ledger')">&#128221; Ledger</button>
+  </div>
+
+  <!-- ADD TRIP PANEL -->
+  <div id="ft-panel-add">
+    <div class="card">
+      <div class="field-label">Truck number *</div>
+      <input type="text" id="ft-truck" placeholder="e.g. UP 77 BA 1234" oninput="autoFmtTruck(this)" autocomplete="off" style="text-transform:uppercase;">
+      <div class="field-error" id="ft-truck-err" style="display:none;">Invalid format. Use: UP 77 HA 2224</div>
+      <div class="field-label">Date *</div>
+      <input type="date" id="ft-date">
+      <div class="field-label">Destination *</div>
+      <input type="text" id="ft-dest" placeholder="e.g. Lucknow">
+      <div class="inline-row" style="margin-bottom:0;">
+        <div><div class="field-label">Total Freight &#8377;</div><input type="number" id="ft-total" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
+        <div><div class="field-label">Advance Paid &#8377;</div><input type="number" id="ft-advance" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
+      </div>
+      <div class="inline-row" style="margin-bottom:0;">
+        <div><div class="field-label">Customer Payable &#8377;</div><input type="number" id="ft-customer" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
+        <div><div class="field-label">Balance By Us &#8377;</div><input type="number" id="ft-balance" readonly style="background:var(--bg-secondary);color:var(--text-secondary);"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:10px 0;">
+        <input type="checkbox" id="ft-receipt" style="width:auto;margin:0;">
+        <label for="ft-receipt" style="font-size:14px;margin:0;">Receipt received</label>
+      </div>
+      <div class="field-label">Notes</div>
+      <input type="text" id="ft-notes" placeholder="Optional remarks">
+      <button class="btn btn-primary" onclick="addFreightEntry()">Save Trip</button>
+    </div>
+  </div>
+
+  <!-- LEDGER PANEL -->
+  <div id="ft-panel-ledger" style="display:none;">
+    <div class="tab-bar" style="margin-bottom:12px;">
+      <button class="tab active" id="fl-by-truck-btn" onclick="switchLedgerView('truck')">&#128666; By Truck</button>
+      <button class="tab" id="fl-by-date-btn" onclick="switchLedgerView('date')">&#128197; By Date</button>
+    </div>
+
+    <!-- BY TRUCK -->
+    <div id="fl-truck-panel">
+      <div class="card" style="margin-bottom:12px;">
+        <div class="field-label">Enter truck number</div>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="fl-truck-input" placeholder="e.g. UP 77 BA 1234" oninput="autoFmtTruck(this)" style="flex:1;text-transform:uppercase;" autocomplete="off">
+          <button class="btn btn-primary btn-sm" onclick="searchTruckLedger()">Search</button>
+        </div>
+      </div>
+      <div id="fl-truck-result"></div>
+    </div>
+
+    <!-- BY DATE -->
+    <div id="fl-date-panel" style="display:none;">
+      <div class="card" style="margin-bottom:12px;">
+        <div class="field-label">Select date</div>
+        <input type="date" id="fl-date-input" onchange="searchDateLedger()">
+      </div>
+      <div id="fl-date-result"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Row slip print area — hidden normally, shown only when printing -->
 <div id="slip-print-area"></div>
 
@@ -654,7 +759,13 @@ try {
     async saveOpeningStock(o){try{await _db.collection("stock_config").doc("opening").set({data:o});return true;}catch(e){return false;}},
     async loadOpeningStock(){try{const sn=await _db.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(e){return null;}},
     listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{}); },
-    listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{});}
+    listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
+    async saveFreightEntry(e){try{await _db.collection("freight_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
+    async deleteFreightEntry(id){try{await _db.collection("freight_entries").doc(id).delete();return true;}catch(e){return false;}},
+    async loadFreightEntries(){try{const sn=await _db.collection("freight_entries").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
+    async saveFreightPayment(p){try{await _db.collection("freight_payments").doc(p.id).set(p);return true;}catch(e){return false;}},
+    async deleteFreightPayment(id){try{await _db.collection("freight_payments").doc(id).delete();return true;}catch(e){return false;}},
+    async loadFreightPayments(){try{const sn=await _db.collection("freight_payments").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
   };
   window._fbOK = true;
   window.dispatchEvent(new Event('fbReady'));
@@ -665,7 +776,7 @@ try {
 }
 </script>
 <script>
-const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1'};
+const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1',FREIGHT_ENTRIES:'tl_freight_m1',FREIGHT_PAYMENTS:'tl_freight_pay_m1'};
 let CU=null,curSessId=null,homeFilter='active',truckType='small';
 let sortOrder='desc'; // 'desc' = newest first, 'asc' = oldest first
 let pendingModal=null,editSessId=null,elTimer=null;
@@ -759,6 +870,12 @@ async function pullCloud(){
     }
     if(window._fb.loadOpeningStock){
       const co=await window._fb.loadOpeningStock();if(co)SS(SK.OPENING,co);
+    }
+    if(window._fb.loadFreightEntries){
+      const cfe=await window._fb.loadFreightEntries();if(cfe)SS(K.FREIGHT_ENTRIES,cfe);
+    }
+    if(window._fb.loadFreightPayments){
+      const cfp=await window._fb.loadFreightPayments();if(cfp)SS(K.FREIGHT_PAYMENTS,cfp);
     }
   }catch(e){}
 }
@@ -947,6 +1064,7 @@ function goTo(s){
   if(s!=='screen-loading') stopAutoSave();
   var cm=document.getElementById('confirm-modal');if(cm)cm.classList.remove('open');
   var em=document.getElementById('edit-user-modal');if(em)em.classList.remove('open');
+  var fm=document.getElementById('freight-edit-modal');if(fm)fm.classList.remove('open');
   document.querySelectorAll('.screen').forEach(function(x){x.classList.remove('active');});
   var target=document.getElementById(s);
   if(!target){console.warn('Screen not found:',s);return;}
@@ -959,6 +1077,7 @@ function goTo(s){
   if(s==='screen-add-production-stock')initProdStockForm();
   if(s==='screen-opening-stock')initOpeningStockForm();
   if(s==='screen-contractor-report')initContractorReport();
+  if(s==='screen-freight')initFreightScreen();
 }
 function goToStock(){goTo('screen-stock-home');}
 
@@ -978,6 +1097,7 @@ window.addEventListener('popstate', function(e){
     'screen-add-production-stock':  'screen-stock-home',
     'screen-opening-stock':         'screen-stock-home',
     'screen-contractor-report':     'screen-stock-home',
+    'screen-freight':                 'screen-home',
   };
   var dest = backMap[id];
   if(dest){
@@ -1074,9 +1194,15 @@ function renderHome(){
   document.getElementById('admin-bar').innerHTML=isAdmin()?
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
     '<button class="btn btn-warn no-print" style="flex:1;" onclick="goTo(\'screen-admin\')">&#9881; Admin panel</button>'+
-    '<button class="btn btn-sm btn-secondary no-print" style="flex:1;" onclick="goToStock()">📦 Stock</button>'+
+    '<button class="btn btn-sm btn-secondary no-print" style="flex:1;" onclick="goToStock()">&#128230; Stock</button>'+
+    '</div>'+
+    '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
+    '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-freight\')">&#128666; Freight Ledger</button>'+
     '</div>':
-    (isAccounts()?'<button class="btn btn-secondary no-print" style="margin-bottom:12px;" onclick="goToStock()">📦 Stock</button>':'');
+    (isAccounts()?
+    '<button class="btn btn-secondary no-print" style="margin-bottom:8px;width:100%;" onclick="goToStock()">&#128230; Stock</button>'+
+    '<button class="btn btn-secondary no-print" style="margin-bottom:12px;width:100%;" onclick="goTo(\'screen-freight\')">&#128666; Freight Ledger</button>':
+    '');
   // Tabs visibility
   const td=document.getElementById('tab-done');
   const ta=document.getElementById('tab-active');
@@ -1245,32 +1371,16 @@ function deleteSKU(id){
   });
 }
 function toggleSKU(id){
-  const skus=loadSKUs();
-  const sk=skus.find(s=>s.id===id);
-  if(!sk)return;
-  sk.disabled=!(sk.disabled||false);
-  saveSKUs(skus);
-  renderSKUs();
+  const skus=loadSKUs();const sk=skus.find(s=>s.id===id);if(!sk)return;
+  sk.disabled=!(sk.disabled||false);saveSKUs(skus);renderSKUs();
 }
 function editSKU(id){
-  const skus=loadSKUs();
-  const sk=skus.find(s=>s.id===id);
-  if(!sk)return;
-  const newName=prompt('Edit SKU name:',sk.name);
-  if(newName===null)return; // cancelled
-  const trimmed=newName.trim();
-  if(!trimmed){alert('SKU name cannot be empty.');return;}
-  // Check duplicate (excluding self)
-  if(skus.find(s=>s.id!==id&&s.name.toLowerCase()===trimmed.toLowerCase())){
-    alert('A SKU with the name "'+trimmed+'" already exists.');return;
-  }
-  const newUnit=prompt('Edit unit (box/bag):',sk.unit);
-  if(newUnit===null)return; // cancelled
-  const trimmedUnit=newUnit.trim()||sk.unit;
-  sk.name=trimmed;
-  sk.unit=trimmedUnit;
-  saveSKUs(skus);
-  renderSKUs();
+  const skus=loadSKUs();const sk=skus.find(s=>s.id===id);if(!sk)return;
+  const newName=prompt('Edit SKU name:',sk.name);if(newName===null)return;
+  const trimmed=newName.trim();if(!trimmed){alert('SKU name cannot be empty.');return;}
+  if(skus.find(s=>s.id!==id&&s.name.toLowerCase()===trimmed.toLowerCase())){alert('A SKU with the name "'+trimmed+'" already exists.');return;}
+  const newUnit=prompt('Edit unit (box/bag):',sk.unit);if(newUnit===null)return;
+  sk.name=trimmed;sk.unit=newUnit.trim()||sk.unit;saveSKUs(skus);renderSKUs();
 }
 
 // Sessions
@@ -1308,16 +1418,24 @@ function confirmDel(id,truck){
 function startEditSess(id){
   editSessId=id;const s=getSess(id);
   document.getElementById('es-date').value=s.date||'';document.getElementById('es-truck').value=s.truck||'';
-  document.getElementById('es-driver').value=s.driver||'';document.getElementById('es-incharge').value=s.incharge||'';
-  document.getElementById('es-dest').value=s.dest||'';goTo('screen-edit-session');
+  document.getElementById('es-driver').value=s.driver||'';document.getElementById('es-driver-mobile').value=s.driverMobile||'';
+  document.getElementById('es-incharge').value=s.incharge||'';
+  document.getElementById('es-dest').value=s.dest||'';document.getElementById('es-truck-err').style.display='none';goTo('screen-edit-session');
 }
 function cancelEditSession(){editSessId=null;goTo('screen-home');}
 function saveEditSession(){
   const s=getSess(editSessId);
-  s.date=document.getElementById('es-date').value;s.truck=document.getElementById('es-truck').value.trim();
-  s.driver=document.getElementById('es-driver').value.trim();s.incharge=document.getElementById('es-incharge').value.trim();
+  s.date=document.getElementById('es-date').value;
+  s.truck=document.getElementById('es-truck').value.trim().toUpperCase();
+  s.driver=document.getElementById('es-driver').value.trim();
+  s.driverMobile=document.getElementById('es-driver-mobile').value.trim();
+  s.incharge=document.getElementById('es-incharge').value.trim();
   s.dest=document.getElementById('es-dest').value.trim();
+  const errEl=document.getElementById('es-truck-err');
   if(!s.truck||!s.driver){alert('Truck number and driver name required.');return;}
+  if(!validateTruckNo(s.truck)){errEl.style.display='block';document.getElementById('es-truck').focus();return;}
+  errEl.style.display='none';
+  if(s.driverMobile&&(!/^[6-9][0-9]{9}$/.test(s.driverMobile))){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
   s.synced=false;
   saveSess(s);
   if(fbOK&&isOnline&&window._fb){
@@ -1333,14 +1451,19 @@ function selectTruck(type){
   const t=TT[type];document.getElementById('ns-rows').value=t.r;document.getElementById('ns-rows').min=t.mn;document.getElementById('ns-rows').max=t.mx;document.getElementById('rows-hint').textContent=t.h;
 }
 function createSession(){
-  const date=document.getElementById('ns-date').value,truck=document.getElementById('ns-truck').value.trim(),driver=document.getElementById('ns-driver').value.trim();
+  const date=document.getElementById('ns-date').value,truck=document.getElementById('ns-truck').value.trim().toUpperCase(),driver=document.getElementById('ns-driver').value.trim();
+  const driverMobile=document.getElementById('ns-driver-mobile').value.trim();
   const incharge=document.getElementById('ns-incharge').value.trim(),dest=document.getElementById('ns-dest').value.trim(),rows=parseInt(document.getElementById('ns-rows').value)||10;
+  const errEl=document.getElementById('ns-truck-err');
   if(!truck){alert('Please enter the truck number.');return;}
+  if(!validateTruckNo(truck)){errEl.style.display='block';document.getElementById('ns-truck').focus();return;}
+  errEl.style.display='none';
   if(!driver){alert('Please enter the driver name.');return;}
+  if(driverMobile&&(!/^[6-9][0-9]{9}$/.test(driverMobile))){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
   if(!incharge){alert('Please enter the loading incharge name.');return;}
   if(!dest){alert('Please enter the destination.');return;}
   const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
-  const newSess={id,date,truck,driver,incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
+  const newSess={id,date,truck,driver,driverMobile:driverMobile||'',incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
   const ss=loadSessions();ss.push(newSess);saveSessions(ss);
   if(fbOK&&isOnline&&window._fb){
     window._fb.saveSession(newSess).catch(function(){addPQ('session',id);});
@@ -3003,6 +3126,414 @@ window.onerror = function(msg, src, line, col, err){
 };
 </script>
 
+
+
+// ═══════════════════════════════════════════════════════
+// VEHICLE NUMBER UTILITIES
+// ═══════════════════════════════════════════════════════
+function autoFmtTruck(el){
+  var raw=el.value.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  var r='';
+  var i=0;
+  // State code: 2 letters
+  var state='';
+  while(i<raw.length && /[A-Z]/.test(raw[i]) && state.length<2){state+=raw[i];i++;}
+  if(state) r+=state;
+  // District code: 1-2 digits
+  var dist='';
+  while(i<raw.length && /[0-9]/.test(raw[i]) && dist.length<2){dist+=raw[i];i++;}
+  if(dist) r+=' '+dist;
+  // Series: 1-3 letters
+  var series='';
+  while(i<raw.length && /[A-Z]/.test(raw[i]) && series.length<3){series+=raw[i];i++;}
+  if(series) r+=' '+series;
+  // Number: 1-4 digits
+  var num='';
+  while(i<raw.length && /[0-9]/.test(raw[i]) && num.length<4){num+=raw[i];i++;}
+  if(num) r+=' '+num;
+  // Preserve cursor position at end
+  el.value=r;
+}
+function validateTruckNo(v){
+  return /^[A-Z]{2} [0-9]{1,2} [A-Z]{1,3} [0-9]{1,4}$/.test((v||'').trim());
+}
+
+// ═══════════════════════════════════════════════════════
+// FREIGHT DATA LAYER
+// ═══════════════════════════════════════════════════════
+function loadFreightEntries(){return LS(K.FREIGHT_ENTRIES)||[];}
+function saveFreightEntriesLocal(e){SS(K.FREIGHT_ENTRIES,e);}
+function loadFreightPayments(){return LS(K.FREIGHT_PAYMENTS)||[];}
+function saveFreightPaymentsLocal(p){SS(K.FREIGHT_PAYMENTS,p);}
+
+// ═══════════════════════════════════════════════════════
+// FREIGHT SCREEN INIT & TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+var freightTab='add';
+var ledgerView='truck';
+
+function initFreightScreen(){
+  var today=new Date().toISOString().split('T')[0];
+  var ftDate=document.getElementById('ft-date');
+  if(ftDate&&!ftDate.value) ftDate.value=today;
+  var flDate=document.getElementById('fl-date-input');
+  if(flDate&&!flDate.value) flDate.value=today;
+  switchFreightTab(freightTab);
+}
+
+function switchFreightTab(tab){
+  freightTab=tab;
+  document.getElementById('ft-panel-add').style.display=tab==='add'?'block':'none';
+  document.getElementById('ft-panel-ledger').style.display=tab==='ledger'?'block':'none';
+  document.getElementById('ft-tab-add').className='tab'+(tab==='add'?' active':'');
+  document.getElementById('ft-tab-ledger').className='tab'+(tab==='ledger'?' active':'');
+  if(tab==='ledger') switchLedgerView(ledgerView);
+}
+
+function switchLedgerView(view){
+  ledgerView=view;
+  document.getElementById('fl-truck-panel').style.display=view==='truck'?'block':'none';
+  document.getElementById('fl-date-panel').style.display=view==='date'?'block':'none';
+  document.getElementById('fl-by-truck-btn').className='tab'+(view==='truck'?' active':'');
+  document.getElementById('fl-by-date-btn').className='tab'+(view==='date'?' active':'');
+}
+
+// ═══════════════════════════════════════════════════════
+// ADD TRIP FORM
+// ═══════════════════════════════════════════════════════
+function calcFreightBalance(){
+  var total=parseFloat(document.getElementById('ft-total').value)||0;
+  var adv=parseFloat(document.getElementById('ft-advance').value)||0;
+  var cust=parseFloat(document.getElementById('ft-customer').value)||0;
+  document.getElementById('ft-balance').value=(total-adv-cust);
+}
+
+function addFreightEntry(){
+  var truck=document.getElementById('ft-truck').value.trim().toUpperCase();
+  var date=document.getElementById('ft-date').value;
+  var dest=document.getElementById('ft-dest').value.trim();
+  var total=parseFloat(document.getElementById('ft-total').value)||0;
+  var adv=parseFloat(document.getElementById('ft-advance').value)||0;
+  var cust=parseFloat(document.getElementById('ft-customer').value)||0;
+  var balance=total-adv-cust;
+  var receipt=document.getElementById('ft-receipt').checked;
+  var notes=document.getElementById('ft-notes').value.trim();
+  var errEl=document.getElementById('ft-truck-err');
+
+  if(!truck){alert('Please enter truck number.');return;}
+  if(!validateTruckNo(truck)){errEl.style.display='block';document.getElementById('ft-truck').focus();return;}
+  errEl.style.display='none';
+  if(!date){alert('Please select a date.');return;}
+  if(!dest){alert('Please enter destination.');return;}
+  if(total<=0){alert('Please enter total freight amount.');return;}
+  if(adv<0||cust<0){alert('Advance and customer payable cannot be negative.');return;}
+  if(adv+cust>total){alert('Advance + Customer Payable cannot exceed Total Freight.');return;}
+
+  var entry={id:'FE'+Date.now(),truckNo:truck,date:date,destination:dest,
+    totalFreight:total,advance:adv,customerPayable:cust,balanceByUs:balance,
+    receiptReceived:receipt,notes:notes,addedBy:CU.username,createdAt:Date.now()};
+
+  var entries=loadFreightEntries();
+  entries.push(entry);
+  saveFreightEntriesLocal(entries);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
+    window._fb.saveFreightEntry(entry).catch(function(){});
+
+  // Clear form
+  document.getElementById('ft-truck').value='';
+  document.getElementById('ft-dest').value='';
+  document.getElementById('ft-total').value='';
+  document.getElementById('ft-advance').value='';
+  document.getElementById('ft-customer').value='';
+  document.getElementById('ft-balance').value='';
+  document.getElementById('ft-receipt').checked=false;
+  document.getElementById('ft-notes').value='';
+  alert('Trip saved successfully!');
+}
+
+// ═══════════════════════════════════════════════════════
+// FREIGHT EDIT MODAL
+// ═══════════════════════════════════════════════════════
+var freightEditId=null;
+function femCalcBalance(){
+  var t=parseFloat(document.getElementById('fem-total').value)||0;
+  var a=parseFloat(document.getElementById('fem-advance').value)||0;
+  var cu=parseFloat(document.getElementById('fem-customer').value)||0;
+  document.getElementById('fem-balance').value=t-a-cu;
+}
+function openFreightEditModal(id){
+  if(!isAdmin()){alert('Only admin can edit entries.');return;}
+  var e=loadFreightEntries().find(function(x){return x.id===id;});
+  if(!e)return;
+  freightEditId=id;
+  document.getElementById('fem-dest').value=e.destination||'';
+  document.getElementById('fem-total').value=e.totalFreight||0;
+  document.getElementById('fem-advance').value=e.advance||0;
+  document.getElementById('fem-customer').value=e.customerPayable||0;
+  document.getElementById('fem-balance').value=e.balanceByUs||0;
+  document.getElementById('fem-receipt').checked=!!e.receiptReceived;
+  document.getElementById('fem-notes').value=e.notes||'';
+  document.getElementById('freight-edit-modal').classList.add('open');
+}
+function closeFreightEditModal(){
+  document.getElementById('freight-edit-modal').classList.remove('open');
+  freightEditId=null;
+}
+function saveFreightEdit(){
+  if(!freightEditId)return;
+  var entries=loadFreightEntries();
+  var e=entries.find(function(x){return x.id===freightEditId;});
+  if(!e)return;
+  var t=parseFloat(document.getElementById('fem-total').value)||0;
+  var a=parseFloat(document.getElementById('fem-advance').value)||0;
+  var cu=parseFloat(document.getElementById('fem-customer').value)||0;
+  if(a+cu>t){alert('Advance + Customer Payable cannot exceed Total Freight.');return;}
+  e.destination=document.getElementById('fem-dest').value.trim()||e.destination;
+  e.totalFreight=t;e.advance=a;e.customerPayable=cu;
+  e.balanceByUs=t-a-cu;
+  e.receiptReceived=document.getElementById('fem-receipt').checked;
+  e.notes=document.getElementById('fem-notes').value.trim();
+  saveFreightEntriesLocal(entries);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
+    window._fb.saveFreightEntry(e).catch(function(){});
+  closeFreightEditModal();
+  searchTruckLedger();
+}
+
+// ═══════════════════════════════════════════════════════
+// DELETE FREIGHT ENTRY / PAYMENT
+// ═══════════════════════════════════════════════════════
+function deleteFreightEntryById(id){
+  if(!isAdmin()){alert('Only admin can delete entries.');return;}
+  showModal('Delete entry','Permanently delete this freight trip entry?',function(){
+    var entries=loadFreightEntries().filter(function(e){return e.id!==id;});
+    saveFreightEntriesLocal(entries);
+    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightEntry)
+      window._fb.deleteFreightEntry(id).catch(function(){});
+    searchTruckLedger();
+  });
+}
+function deleteFreightPaymentById(id){
+  if(!isAdmin()){alert('Only admin can delete payments.');return;}
+  showModal('Delete payment','Permanently delete this payment record?',function(){
+    var payments=loadFreightPayments().filter(function(p){return p.id!==id;});
+    saveFreightPaymentsLocal(payments);
+    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightPayment)
+      window._fb.deleteFreightPayment(id).catch(function(){});
+    searchTruckLedger();
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// ADD PAYMENT
+// ═══════════════════════════════════════════════════════
+function addFreightPayment(truckNo){
+  var amtStr=prompt('Payment amount for '+truckNo+' (\u20B9):');
+  if(amtStr===null)return;
+  var amt=parseFloat(amtStr);
+  if(!amt||amt<=0){alert('Invalid amount. Please enter a positive number.');return;}
+  var notes=prompt('Notes (optional, press OK to skip):')||'';
+  var today=new Date().toISOString().split('T')[0];
+  var payment={id:'FP'+Date.now(),truckNo:truckNo,date:today,amount:amt,
+    notes:notes,addedBy:CU.username,createdAt:Date.now()};
+  var payments=loadFreightPayments();
+  payments.push(payment);
+  saveFreightPaymentsLocal(payments);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightPayment)
+    window._fb.saveFreightPayment(payment).catch(function(){});
+  searchTruckLedger();
+}
+
+// ═══════════════════════════════════════════════════════
+// LEDGER — BY TRUCK
+// ═══════════════════════════════════════════════════════
+function searchTruckLedger(){
+  var truck=(document.getElementById('fl-truck-input').value||'').trim().toUpperCase();
+  var result=document.getElementById('fl-truck-result');
+  if(!truck){result.innerHTML='<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px;">Enter a truck number and tap Search.</div>';return;}
+  if(!validateTruckNo(truck)){result.innerHTML='<div style="font-size:13px;color:var(--red);text-align:center;padding:12px;">Invalid truck number format.</div>';return;}
+
+  var entries=loadFreightEntries().filter(function(e){return e.truckNo===truck;})
+    .sort(function(a,b){return a.date>b.date?1:-1;});
+  var payments=loadFreightPayments().filter(function(p){return p.truckNo===truck;})
+    .sort(function(a,b){return a.date>b.date?1:-1;});
+
+  var totalFreight=entries.reduce(function(s,e){return s+e.totalFreight;},0);
+  var totalAdvance=entries.reduce(function(s,e){return s+e.advance;},0);
+  var totalCustPay=entries.reduce(function(s,e){return s+e.customerPayable;},0);
+  var totalBalDue=entries.reduce(function(s,e){return s+e.balanceByUs;},0);
+  var totalPaid=payments.reduce(function(s,p){return s+p.amount;},0);
+  var netOutstanding=totalBalDue-totalPaid;
+
+  var adminOnly=isAdmin();
+  var canPrint=isAdmin();
+
+  var html='<div class="freight-summary">';
+  html+='<div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+truck+'</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;">';
+  html+='<div>Total Trips: <b>'+entries.length+'</b></div>';
+  html+='<div>Total Freight: <b>&#8377;'+totalFreight.toLocaleString('en-IN')+'</b></div>';
+  html+='<div>Total Advance: <b>&#8377;'+totalAdvance.toLocaleString('en-IN')+'</b></div>';
+  html+='<div>Customer Payable: <b>&#8377;'+totalCustPay.toLocaleString('en-IN')+'</b></div>';
+  html+='<div>Total Paid By Us: <b>&#8377;'+totalPaid.toLocaleString('en-IN')+'</b></div>';
+  html+='<div>Net Outstanding: <b class="'+(netOutstanding>0?'fbal-positive':'fbal-zero')+'">&#8377;'+netOutstanding.toLocaleString('en-IN')+'</b></div>';
+  html+='</div></div>';
+
+  // Buttons
+  html+='<div style="display:flex;gap:8px;margin-bottom:12px;">';
+  html+='<button class="btn btn-primary btn-sm" onclick="addFreightPayment(''+truck+'')">+ Record Payment</button>';
+  if(canPrint) html+='<button class="btn btn-secondary btn-sm" onclick="printTruckLedger(''+truck+'')">&#128424; Print Ledger</button>';
+  html+='</div>';
+
+  // Trip entries
+  if(entries.length){
+    html+='<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Trip Entries</div>';
+    entries.forEach(function(e){
+      html+='<div class="freight-trip'+(e.receiptReceived?' receipt-ok':'')+'">';
+      html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
+      html+='<div><div style="font-weight:600;font-size:14px;">'+e.destination+'</div>';
+      html+='<div style="font-size:12px;color:var(--text-secondary);">'+e.date+(e.notes?' &middot; '+e.notes:'')+'</div></div>';
+      html+='<div style="text-align:right;font-size:12px;">';
+      html+=(e.receiptReceived?'<span style="color:var(--green);font-size:11px;">&#10003; Receipt</span>':'<span style="color:var(--amber);font-size:11px;">&#9888; No receipt</span>');
+      html+='</div></div>';
+      html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:8px;font-size:12px;text-align:center;">';
+      html+='<div style="background:var(--bg-secondary);border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Total</div><div style="font-weight:600;">&#8377;'+e.totalFreight.toLocaleString('en-IN')+'</div></div>';
+      html+='<div style="background:var(--bg-secondary);border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Advance</div><div style="font-weight:600;">&#8377;'+e.advance.toLocaleString('en-IN')+'</div></div>';
+      html+='<div style="background:var(--bg-secondary);border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Customer</div><div style="font-weight:600;">&#8377;'+e.customerPayable.toLocaleString('en-IN')+'</div></div>';
+      html+='<div style="background:'+(e.balanceByUs>0?'#ffeaea':'var(--bg-secondary)')+';border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Our Balance</div><div style="font-weight:600;color:'+(e.balanceByUs>0?'var(--red)':'var(--green)')+';">&#8377;'+e.balanceByUs.toLocaleString('en-IN')+'</div></div>';
+      html+='</div>';
+      if(adminOnly){
+        html+='<div style="display:flex;gap:6px;margin-top:8px;">';
+        html+='<button class="btn btn-sm" style="background:var(--blue);color:#fff;font-size:11px;" onclick="openFreightEditModal(''+e.id+'')">&#9998; Edit</button>';
+        html+='<button class="btn btn-sm btn-danger" style="font-size:11px;" onclick="deleteFreightEntryById(''+e.id+'')">&#128465; Delete</button>';
+        html+='</div>';
+      }
+      html+='</div>';
+    });
+  } else {
+    html+='<div style="font-size:13px;color:var(--text-secondary);padding:12px 0;">No trip entries found for this truck.</div>';
+  }
+
+  // Payment history
+  if(payments.length){
+    html+='<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin:12px 0 6px;">Payment History</div>';
+    payments.forEach(function(p){
+      html+='<div class="freight-payment-row">';
+      html+='<div><div style="font-weight:600;">&#8377;'+p.amount.toLocaleString('en-IN')+'</div>';
+      html+='<div style="color:var(--text-secondary);font-size:11px;">'+p.date+(p.notes?' &middot; '+p.notes:'')+'</div></div>';
+      if(adminOnly){
+        html+='<button class="btn btn-sm btn-danger" style="font-size:11px;" onclick="deleteFreightPaymentById(''+p.id+'')">&#128465;</button>';
+      }
+      html+='</div>';
+    });
+  }
+
+  result.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════
+// LEDGER — BY DATE
+// ═══════════════════════════════════════════════════════
+function searchDateLedger(){
+  var date=document.getElementById('fl-date-input').value;
+  var result=document.getElementById('fl-date-result');
+  if(!date){result.innerHTML='';return;}
+  var entries=loadFreightEntries().filter(function(e){return e.date===date;})
+    .sort(function(a,b){return a.truckNo>b.truckNo?1:-1;});
+  if(!entries.length){
+    result.innerHTML='<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px;">No freight entries for '+date+'.</div>';
+    return;
+  }
+  var totalFreight=entries.reduce(function(s,e){return s+e.totalFreight;},0);
+  var totalBal=entries.reduce(function(s,e){return s+e.balanceByUs;},0);
+  var html='<div class="freight-summary" style="margin-bottom:12px;">';
+  html+='<div style="font-size:13px;"><b>'+entries.length+'</b> trips &nbsp;|&nbsp; Total Freight: <b>&#8377;'+totalFreight.toLocaleString('en-IN')+'</b> &nbsp;|&nbsp; Our Balance: <b class="'+(totalBal>0?'fbal-positive':'fbal-zero')+'">&#8377;'+totalBal.toLocaleString('en-IN')+'</b></div>';
+  html+='</div>';
+  entries.forEach(function(e){
+    html+='<div class="freight-trip'+(e.receiptReceived?' receipt-ok':'')+'" style="margin-bottom:8px;">';
+    html+='<div style="font-weight:600;font-size:14px;">'+e.truckNo+' &#8594; '+e.destination+'</div>';
+    html+='<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px;">Added by: '+e.addedBy+(e.notes?' &middot; '+e.notes:'')+'</div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;font-size:12px;text-align:center;">';
+    html+='<div style="background:var(--bg-secondary);border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Total</div><div style="font-weight:600;">&#8377;'+e.totalFreight.toLocaleString('en-IN')+'</div></div>';
+    html+='<div style="background:var(--bg-secondary);border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Advance</div><div style="font-weight:600;">&#8377;'+e.advance.toLocaleString('en-IN')+'</div></div>';
+    html+='<div style="background:var(--bg-secondary);border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Customer</div><div style="font-weight:600;">&#8377;'+e.customerPayable.toLocaleString('en-IN')+'</div></div>';
+    html+='<div style="background:'+(e.balanceByUs>0?'#ffeaea':'var(--bg-secondary)')+';border-radius:4px;padding:4px;"><div style="color:var(--text-secondary);">Our Balance</div><div style="font-weight:600;color:'+(e.balanceByUs>0?'var(--red)':'var(--green)')+';">&#8377;'+e.balanceByUs.toLocaleString('en-IN')+'</div></div>';
+    html+='</div>';
+    html+='<div style="font-size:11px;margin-top:6px;">'+(e.receiptReceived?'<span style="color:var(--green);">&#10003; Receipt received</span>':'<span style="color:var(--amber);">&#9888; Receipt pending</span>')+'</div>';
+    html+='</div>';
+  });
+  result.innerHTML=html;
+}
+
+// ═══════════════════════════════════════════════════════
+// PRINT TRUCK LEDGER (Admin only)
+// ═══════════════════════════════════════════════════════
+function printTruckLedger(truck){
+  if(!isAdmin()){alert('Only admin can print.');return;}
+  var entries=loadFreightEntries().filter(function(e){return e.truckNo===truck;})
+    .sort(function(a,b){return a.date>b.date?1:-1;});
+  var payments=loadFreightPayments().filter(function(p){return p.truckNo===truck;})
+    .sort(function(a,b){return a.date>b.date?1:-1;});
+  var totalFreight=entries.reduce(function(s,e){return s+e.totalFreight;},0);
+  var totalBal=entries.reduce(function(s,e){return s+e.balanceByUs;},0);
+  var totalPaid=payments.reduce(function(s,p){return s+p.amount;},0);
+  var netOutstanding=totalBal-totalPaid;
+  var printDate=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+
+  var tripRows=entries.map(function(e,i){
+    return '<tr>'
+      +'<td>'+(i+1)+'</td>'
+      +'<td>'+e.date+'</td>'
+      +'<td>'+e.destination+'</td>'
+      +'<td style="text-align:right;">&#8377;'+e.totalFreight.toLocaleString('en-IN')+'</td>'
+      +'<td style="text-align:right;">&#8377;'+e.advance.toLocaleString('en-IN')+'</td>'
+      +'<td style="text-align:right;">&#8377;'+e.customerPayable.toLocaleString('en-IN')+'</td>'
+      +'<td style="text-align:right;'+(e.balanceByUs>0?'color:#c0392b;font-weight:700;':'')+'">&#8377;'+e.balanceByUs.toLocaleString('en-IN')+'</td>'
+      +'<td style="text-align:center;">'+(e.receiptReceived?'Yes':'No')+'</td>'
+      +'<td>'+(e.notes||'')+'</td>'
+      +'</tr>';
+  }).join('');
+
+  var payRows=payments.map(function(p){
+    return '<tr><td>'+p.date+'</td><td style="text-align:right;">&#8377;'+p.amount.toLocaleString('en-IN')+'</td><td>'+p.addedBy+'</td><td>'+(p.notes||'')+'</td></tr>';
+  }).join('');
+
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8">'
+    +'<title>Freight Ledger - '+truck+'</title>'
+    +'<style>@page{margin:1.2cm;}body{font-family:Arial,sans-serif;font-size:12px;color:#222;}'
+    +'h2{margin:0 0 2px;font-size:16px;}h3{font-size:13px;margin:16px 0 6px;}'
+    +'.sub{font-size:11px;color:#666;margin-bottom:12px;}'
+    +'table{width:100%;border-collapse:collapse;margin-bottom:12px;}'
+    +'th{background:#f0f0f0;font-size:10px;text-transform:uppercase;padding:6px 8px;text-align:left;border-bottom:2px solid #ccc;}'
+    +'td{padding:5px 8px;border-bottom:1px solid #eee;}'
+    +'.summary-box{background:#f9f9f9;border:1px solid #ddd;border-radius:4px;padding:10px;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}'
+    +'.sum-item{font-size:12px;}.sum-val{font-size:15px;font-weight:700;}'
+    +'.outstanding{color:#c0392b;}.settled{color:#27ae60;}</style></head><body>'
+    +'<h2>Maruti Namkeen &#8212; Freight Ledger</h2>'
+    +'<div class="sub">Truck: <b>'+truck+'</b> &nbsp;|&nbsp; Printed: '+printDate+'</div>'
+    +'<div class="summary-box">'
+    +'<div class="sum-item"><div>Total Freight</div><div class="sum-val">&#8377;'+totalFreight.toLocaleString('en-IN')+'</div></div>'
+    +'<div class="sum-item"><div>Total Paid By Us</div><div class="sum-val">&#8377;'+totalPaid.toLocaleString('en-IN')+'</div></div>'
+    +'<div class="sum-item"><div>Net Outstanding</div><div class="sum-val '+(netOutstanding>0?'outstanding':'settled')+'">&#8377;'+netOutstanding.toLocaleString('en-IN')+'</div></div>'
+    +'</div>'
+    +'<h3>Trip Entries ('+entries.length+')</h3>'
+    +'<table><thead><tr><th>#</th><th>Date</th><th>Destination</th><th>Total &#8377;</th><th>Advance &#8377;</th><th>Customer &#8377;</th><th>Our Balance &#8377;</th><th>Receipt</th><th>Notes</th></tr></thead>'
+    +'<tbody>'+tripRows+'</tbody></table>'
+    +(payments.length?'<h3>Payment History</h3><table><thead><tr><th>Date</th><th>Amount &#8377;</th><th>By</th><th>Notes</th></tr></thead><tbody>'+payRows+'</tbody></table>':'')
+    +'</body></html>';
+
+  var iframe=document.getElementById('print-iframe');
+  if(!iframe){
+    iframe=document.createElement('iframe');
+    iframe.id='print-iframe';
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(html);
+  iframe.contentDocument.close();
+  setTimeout(function(){iframe.contentWindow.print();},350);
+}
 
 </body>
 </html>
