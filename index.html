@@ -417,7 +417,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <div class="field-error" id="ns-truck-err" style="display:none;">Invalid format. Use: UP 77 HA 2224</div>
     <div class="inline-row" style="margin-bottom:0;">
       <div><div class="field-label">Driver name *</div><input type="text" id="ns-driver" placeholder="e.g. Vivek Kumar"></div>
-      <div><div class="field-label">Driver mobile</div><input type="number" id="ns-driver-mobile" placeholder="10-digit mobile"></div>
+      <div><div class="field-label">Driver mobile *</div><input type="number" id="ns-driver-mobile" placeholder="10-digit mobile"></div>
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="ns-incharge" placeholder="e.g. Ramesh Singh">
     <div class="field-label">Destination / Route</div><input type="text" id="ns-dest" placeholder="e.g. Lucknow Godown">
@@ -449,7 +449,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <div class="field-error" id="es-truck-err" style="display:none;">Invalid format. Use: UP 77 HA 2224</div>
     <div class="inline-row" style="margin-bottom:0;">
       <div><div class="field-label">Driver name *</div><input type="text" id="es-driver"></div>
-      <div><div class="field-label">Driver mobile</div><input type="number" id="es-driver-mobile" placeholder="10-digit mobile"></div>
+      <div><div class="field-label">Driver mobile *</div><input type="number" id="es-driver-mobile" placeholder="10-digit mobile"></div>
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="es-incharge">
     <div class="field-label">Destination / Route</div><input type="text" id="es-dest">
@@ -1421,6 +1421,8 @@ function startEditSess(id,fromLoading){
   if(s.done&&!isAdmin()){alert('Only admin can edit completed sessions.');return;}
   editSessId=id;editFromLoading=!!fromLoading;
   document.getElementById('es-date').value=s.date||'';
+  var esd=document.getElementById('es-date');
+  if(!isAdmin()){esd.readOnly=true;esd.style.background='var(--bg-secondary)';esd.style.color='var(--text-secondary)';esd.style.cursor='not-allowed';}else{esd.readOnly=false;esd.style.background='';esd.style.color='';esd.style.cursor='';}
   document.getElementById('es-truck').value=autoFmtTruckVal(s.truck||'');
   document.getElementById('es-driver').value=s.driver||'';
   document.getElementById('es-driver-mobile').value=s.driverMobile||'';
@@ -1439,10 +1441,16 @@ function saveEditSession(){
   s.incharge=document.getElementById('es-incharge').value.trim();
   s.dest=document.getElementById('es-dest').value.trim();
   const errEl=document.getElementById('es-truck-err');
-  if(!s.truck||!s.driver){alert('Truck number and driver name required.');return;}
+  if(!s.truck){alert('Truck number is required.');return;}
   if(!validateTruckNo(s.truck)){errEl.style.display='block';document.getElementById('es-truck').focus();return;}
   errEl.style.display='none';
-  if(s.driverMobile&&(!/^[6-9][0-9]{9}$/.test(s.driverMobile))){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
+  if(!s.driver){alert('Driver name is required.');return;}
+  if(!/^[A-Za-z ]+$/.test(s.driver)){alert('Driver name must contain letters only — no numbers or special characters.');return;}
+  if(!s.driverMobile){alert('Driver mobile number is required.');return;}
+  if(!/^[6-9][0-9]{9}$/.test(s.driverMobile)){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
+  if(!s.incharge){alert('Loading incharge name is required.');return;}
+  if(!/^[A-Za-z ]+$/.test(s.incharge)){alert('Loading incharge name must contain letters only.');return;}
+  if(!s.dest){alert('Destination is required.');return;}
   s.synced=false;
   saveSess(s);
   if(fbOK&&isOnline&&window._fb){
@@ -1466,10 +1474,13 @@ function createSession(){
   if(!truck){alert('Please enter the truck number.');return;}
   if(!validateTruckNo(truck)){errEl.style.display='block';document.getElementById('ns-truck').focus();return;}
   errEl.style.display='none';
-  if(!driver){alert('Please enter the driver name.');return;}
-  if(driverMobile&&(!/^[6-9][0-9]{9}$/.test(driverMobile))){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
-  if(!incharge){alert('Please enter the loading incharge name.');return;}
-  if(!dest){alert('Please enter the destination.');return;}
+  if(!driver){alert('Driver name is required.');return;}
+  if(!/^[A-Za-z ]+$/.test(driver)){alert('Driver name must contain letters only — no numbers or special characters.');return;}
+  if(!driverMobile){alert('Driver mobile number is required.');return;}
+  if(!/^[6-9][0-9]{9}$/.test(driverMobile)){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
+  if(!incharge){alert('Loading incharge name is required.');return;}
+  if(!/^[A-Za-z ]+$/.test(incharge)){alert('Loading incharge name must contain letters only.');return;}
+  if(!dest){alert('Destination is required.');return;}
   const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
   const newSess={id,date,truck,driver,driverMobile:driverMobile||'',incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
   const ss=loadSessions();ss.push(newSess);saveSessions(ss);
@@ -3113,7 +3124,17 @@ function getISTDate(){
 
 // Init new session screen with IST date
 function initNewSession(){
-  document.getElementById('ns-date').value=getISTDate();
+  var d=document.getElementById('ns-date');
+  d.value=getISTDate();
+  if(!isAdmin()){
+    d.readOnly=true;
+    d.style.background='var(--bg-secondary)';
+    d.style.color='var(--text-secondary)';
+    d.style.cursor='not-allowed';
+  } else {
+    d.readOnly=false;
+    d.style.background='';d.style.color='';d.style.cursor='';
+  }
 }
 
 function autoFmtTruck(el){
