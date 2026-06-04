@@ -679,11 +679,13 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <!-- BY TRUCK -->
     <div id="fl-truck-panel">
       <div class="card" style="margin-bottom:12px;">
-        <div class="field-label">Enter truck number</div>
+        <div class="field-label">Truck number</div>
         <div style="display:flex;gap:8px;">
           <input type="text" id="fl-truck-input" placeholder="e.g. UP 77 BA 1234" oninput="autoFmtTruck(this)" style="flex:1;text-transform:uppercase;" autocomplete="off">
           <button class="btn btn-primary btn-sm" onclick="searchTruckLedger()">Search</button>
         </div>
+        <div class="field-label" style="margin-top:10px;">As of date <span style="font-size:11px;color:var(--text-secondary);">(optional — leave blank for full history)</span></div>
+        <input type="date" id="fl-asof-date" style="margin-bottom:0;">
       </div>
       <div id="fl-truck-result"></div>
     </div>
@@ -3126,6 +3128,11 @@ function getISTDate(){
 // Init new session screen with IST date
 function initNewSession(){
   requestAnimationFrame(function(){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0;});
+  // Clear all fields so previous session data doesn't persist
+  ['ns-truck','ns-driver','ns-driver-mobile','ns-incharge','ns-dest'].forEach(function(id){
+    var el=document.getElementById(id); if(el) el.value='';
+  });
+  var errEl=document.getElementById('ns-truck-err'); if(errEl) errEl.style.display='none';
   var d=document.getElementById('ns-date');
   d.value=getISTDate();
   if(!isAdmin()){
@@ -3341,21 +3348,29 @@ function deleteFreightPaymentById(id){
 // ═══════════════════════════════════════════════════════
 // ADD PAYMENT
 // ═══════════════════════════════════════════════════════
-function addFreightPayment(truckNo){
-  var amtStr=prompt('Payment amount for '+truckNo+' (\u20B9):');
-  if(amtStr===null)return;
-  var amt=parseFloat(amtStr);
-  if(!amt||amt<=0){alert('Invalid amount. Please enter a positive number.');return;}
-  var notes=prompt('Notes (optional, press OK to skip):')||'';
-  var today=new Date().toISOString().split('T')[0];
-  var payment={id:'FP'+Date.now(),truckNo:truckNo,date:today,amount:amt,
+function saveFreightPaymentInline(){
+  var truck=window._ftTruck;
+  if(!truck){alert('No truck selected.');return;}
+  var amtEl=document.getElementById('ft-pay-amount');
+  var notesEl=document.getElementById('ft-pay-notes');
+  var amt=parseFloat(amtEl?amtEl.value:'');
+  var notes=notesEl?notesEl.value.trim():'';
+  if(!amt||amt<=0){alert('Please enter a valid payment amount.');return;}
+  var today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
+  var payment={id:'FP'+Date.now(),truckNo:truck,date:today,amount:amt,
     notes:notes,addedBy:CU.username,createdAt:Date.now()};
   var payments=loadFreightPayments();
   payments.push(payment);
   saveFreightPaymentsLocal(payments);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightPayment)
     window._fb.saveFreightPayment(payment).catch(function(){});
-  searchTruckLedger();
+  searchTruckLedger(); // refresh results
+}
+
+function addFreightPayment(truckNo){
+  // Legacy — redirect to inline form (scroll to payment card)
+  var card=document.getElementById('ft-pay-amount');
+  if(card){card.focus();card.scrollIntoView({behavior:'smooth',block:'center'});}
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3381,12 +3396,14 @@ function searchTruckLedger(){
 
   var adminOnly=isAdmin();
   var canPrint=isAdmin();
+  var asOf=document.getElementById('fl-asof-date').value||'';
+  if(asOf){ entries=entries.filter(function(e){return e.date<=asOf;}); payments=payments.filter(function(p){return p.date<=asOf;}); }
   window._ftTruck=truck;
   window._ftEntryIds=entries.map(function(e){return e.id;});
   window._ftPayIds=payments.map(function(p){return p.id;});
 
   var html='<div class="freight-summary">';
-  html+='<div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+truck+'</div>';
+  html+='<div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+truck+(asOf?' <span style="font-size:11px;font-weight:400;color:var(--text-secondary);">as of '+asOf+'</span>':'')+'</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;">';
   html+='<div>Total Trips: <b>'+entries.length+'</b></div>';
   html+='<div>Total Freight: <b>&#8377;'+totalFreight.toLocaleString('en-IN')+'</b></div>';
@@ -3396,16 +3413,21 @@ function searchTruckLedger(){
   html+='<div>Net Outstanding: <b class="'+(netOutstanding>0?'fbal-positive':'fbal-zero')+'">&#8377;'+netOutstanding.toLocaleString('en-IN')+'</b></div>';
   html+='</div></div>';
 
-  // Buttons
-  html+='<div style="display:flex;gap:8px;margin-bottom:12px;">';
-  html+='<button class="btn btn-primary btn-sm" onclick="addFreightPayment(window._ftTruck)">+ Record Payment</button>';
-  if(canPrint) html+='<button class="btn btn-secondary btn-sm" onclick="printTruckLedger(window._ftTruck)">&#128424; Print Ledger</button>';
+  // Action buttons + inline payment form
+  if(canPrint) html+='<div style="margin-bottom:10px;"><button class="btn btn-secondary btn-sm" onclick="printTruckLedger(window._ftTruck)">&#128424; Print Ledger</button></div>';
+  html+='<div class="card" style="margin-bottom:12px;padding:12px;">';
+  html+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text-primary);">&#128178; Record Payment</div>';
+  html+='<div style="display:flex;gap:8px;margin-bottom:6px;">';
+  html+='<input type="number" id="ft-pay-amount" placeholder="Amount &#8377;" min="1" style="flex:2;">';
+  html+='<input type="text" id="ft-pay-notes" placeholder="Notes (optional)" style="flex:3;">';
+  html+='</div>';
+  html+='<button class="btn btn-primary btn-sm" style="width:100%;" onclick="saveFreightPaymentInline()">Save Payment</button>';
   html+='</div>';
 
   // Trip entries
   if(entries.length){
     html+='<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin-bottom:6px;">Trip Entries</div>';
-    entries.forEach(function(e){
+    entries.forEach(function(e,i){
       html+='<div class="freight-trip'+(e.receiptReceived?' receipt-ok':'')+'">';
       html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
       html+='<div><div style="font-weight:600;font-size:14px;">'+e.destination+'</div>';
