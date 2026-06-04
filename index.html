@@ -3124,6 +3124,7 @@ function getISTDate(){
 
 // Init new session screen with IST date
 function initNewSession(){
+  requestAnimationFrame(function(){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0;});
   var d=document.getElementById('ns-date');
   d.value=getISTDate();
   if(!isAdmin()){
@@ -3179,7 +3180,11 @@ var freightTab='add';
 var ledgerView='truck';
 
 function initFreightScreen(){
-  window.scrollTo(0,0);
+  requestAnimationFrame(function(){
+    window.scrollTo(0,0);
+    document.documentElement.scrollTop=0;
+    document.body.scrollTop=0;
+  });
   var today=new Date().toISOString().split('T')[0];
   var ftDate=document.getElementById('ft-date');
   if(ftDate&&!ftDate.value) ftDate.value=today;
