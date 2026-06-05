@@ -769,6 +769,8 @@ try {
     async loadOpeningStock(){try{const sn=await _db.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(e){return null;}},
     listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{}); },
     listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
+    listenFreight(cb){return _db.collection("freight_entries").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
+    listenFreightPayments(cb){return _db.collection("freight_payments").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
     async saveFreightEntry(e){try{await _db.collection("freight_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
     async deleteFreightEntry(id){try{await _db.collection("freight_entries").doc(id).delete();return true;}catch(e){return false;}},
     async loadFreightEntries(){try{const sn=await _db.collection("freight_entries").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
@@ -790,7 +792,7 @@ let CU=null,curSessId=null,homeFilter='active',truckType='small';
 let sortOrder='desc'; // 'desc' = newest first, 'asc' = oldest first
 let pendingModal=null,editSessId=null,elTimer=null,editFromLoading=false;
 let editRowIdx=-1,liveRows=[],editRowSnap=null;
-let editUserId=null,fbListener=null;
+let editUserId=null,fbListener=null,fbFreightListener=null,fbPayListener=null;
 let isOnline=navigator.onLine,fbOK=false;
 window.pinLogin=''; window.pinNewUser=''; window.pinEU='';
 
@@ -915,6 +917,27 @@ function startCloudListener(){
       renderHome();
     }
   });
+  // Live listener for freight entries — so changes by other users (e.g. accountant) sync instantly
+  if(fbFreightListener){fbFreightListener();fbFreightListener=null;}
+  if(window._fb.listenFreight){
+    fbFreightListener=window._fb.listenFreight(function(allEntries){
+      SS(K.FREIGHT_ENTRIES,allEntries);
+      // If the freight add-tab pending list is open, refresh it
+      var pd=document.getElementById('ft-pending-date');
+      if(pd&&pd.value)renderPendingFreight(pd.value);
+      // If freight by-date results are showing, refresh
+      var fdDate=document.getElementById('fl-date-input');
+      if(fdDate&&fdDate.value&&document.getElementById('fl-date-panel')&&document.getElementById('fl-date-panel').style.display!=='none')
+        searchDateLedger();
+    });
+  }
+  // Live listener for freight payments
+  if(fbPayListener){fbPayListener();fbPayListener=null;}
+  if(window._fb.listenFreightPayments){
+    fbPayListener=window._fb.listenFreightPayments(function(allPayments){
+      SS(K.FREIGHT_PAYMENTS,allPayments);
+    });
+  }
 }
 
 function LS(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
@@ -1013,6 +1036,8 @@ function doLogout(){
   SS(K.SESSIONS,[]);
   CU=null;editRowIdx=-1;liveRows=[];
   if(fbListener){fbListener();fbListener=null;}
+  if(fbFreightListener){fbFreightListener();fbFreightListener=null;}
+  if(fbPayListener){fbPayListener();fbPayListener=null;}
   stopTimer();stopAutoSave();
   goTo('screen-login');initLogin();
 }
