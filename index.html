@@ -3241,6 +3241,26 @@ function initFreightScreen(){
   var fpDate=document.getElementById('ft-pending-date');
   if(fpDate) fpDate.value=today;
   switchFreightTab(freightTab);
+  // Always pull fresh freight data from Firebase when opening this screen
+  if(fbOK&&isOnline&&window._fb){
+    Promise.all([
+      window._fb.loadFreightEntries&&window._fb.loadFreightEntries(),
+      window._fb.loadFreightPayments&&window._fb.loadFreightPayments()
+    ]).then(function(results){
+      if(results[0]) SS(K.FREIGHT_ENTRIES,results[0]);
+      if(results[1]) SS(K.FREIGHT_PAYMENTS,results[1]);
+      // Re-render whichever view is active with fresh data
+      if(freightTab==='add'){
+        var pd=document.getElementById('ft-pending-date');
+        if(pd&&pd.value) renderPendingFreight(pd.value);
+      }
+      if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck) searchTruckLedger();
+      if(freightTab==='ledger'&&ledgerView==='date'){
+        var fd=document.getElementById('fl-date-input');
+        if(fd&&fd.value) searchDateLedger();
+      }
+    }).catch(function(){});
+  }
 }
 
 function switchFreightTab(tab){
