@@ -922,13 +922,19 @@ function startCloudListener(){
   if(window._fb.listenFreight){
     fbFreightListener=window._fb.listenFreight(function(allEntries){
       SS(K.FREIGHT_ENTRIES,allEntries);
-      // If the freight add-tab pending list is open, refresh it
-      var pd=document.getElementById('ft-pending-date');
-      if(pd&&pd.value)renderPendingFreight(pd.value);
-      // If freight by-date results are showing, refresh
-      var fdDate=document.getElementById('fl-date-input');
-      if(fdDate&&fdDate.value&&document.getElementById('fl-date-panel')&&document.getElementById('fl-date-panel').style.display!=='none')
-        searchDateLedger();
+      // Refresh pending freight panel if Add Trip tab is active and date is set
+      if(freightTab==='add'){
+        var pd=document.getElementById('ft-pending-date');
+        if(pd&&pd.value)renderPendingFreight(pd.value);
+      }
+      // Refresh by-truck ledger if Ledger > By Truck is active and a search result is showing
+      if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
+        searchTruckLedger();
+      // Refresh by-date ledger if Ledger > By Date is active and date is set
+      if(freightTab==='ledger'&&ledgerView==='date'){
+        var fdDate=document.getElementById('fl-date-input');
+        if(fdDate&&fdDate.value)searchDateLedger();
+      }
     });
   }
   // Live listener for freight payments
@@ -936,6 +942,9 @@ function startCloudListener(){
   if(window._fb.listenFreightPayments){
     fbPayListener=window._fb.listenFreightPayments(function(allPayments){
       SS(K.FREIGHT_PAYMENTS,allPayments);
+      // Refresh by-truck ledger if active — payments affect outstanding balance
+      if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
+        searchTruckLedger();
     });
   }
 }
