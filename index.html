@@ -773,7 +773,7 @@ try {
     listenFreightPayments(cb){return _db.collection("freight_payments").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
     async saveFreightEntry(e){try{await _db.collection("freight_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
     async deleteFreightEntry(id){try{await _db.collection("freight_entries").doc(id).delete();return true;}catch(e){return false;}},
-    async loadFreightEntries(){try{const sn=await _db.collection("freight_entries").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
+    async loadFreightEntries(){try{const sn=await _db.collection("freight_entries").get();return sn.docs.map(d=>d.data());}catch(e){console.error('FREIGHT READ ERROR:',e.code,e.message);return null;}},
     async saveFreightPayment(p){try{await _db.collection("freight_payments").doc(p.id).set(p);return true;}catch(e){return false;}},
     async deleteFreightPayment(id){try{await _db.collection("freight_payments").doc(id).delete();return true;}catch(e){return false;}},
     async loadFreightPayments(){try{const sn=await _db.collection("freight_payments").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
@@ -3459,10 +3459,20 @@ function fetchFreshFreight(cb){
       window._fb.loadFreightEntries?window._fb.loadFreightEntries():Promise.resolve(null),
       window._fb.loadFreightPayments?window._fb.loadFreightPayments():Promise.resolve(null)
     ]).then(function(res){
-      if(res[0])SS(K.FREIGHT_ENTRIES,res[0]);
-      if(res[1])SS(K.FREIGHT_PAYMENTS,res[1]);
+      if(res[0]){
+        SS(K.FREIGHT_ENTRIES,res[0]);
+      } else {
+        // Firebase read failed — show visible warning in sync bar
+        setSyncBar('error','⚠️ Freight data read failed — check Firestore rules in Firebase Console');
+        console.error('fetchFreshFreight: loadFreightEntries returned null — possible Firestore rules issue');
+      }
+      if(res[1]) SS(K.FREIGHT_PAYMENTS,res[1]);
       cb();
-    }).catch(function(){cb();});
+    }).catch(function(err){
+      console.error('fetchFreshFreight error:',err);
+      setSyncBar('error','⚠️ Freight sync error — check browser console');
+      cb();
+    });
   } else { cb(); }
 }
 function searchTruckLedger(){fetchFreshFreight(function(){_renderTruckLedger();});}
