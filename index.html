@@ -318,6 +318,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
         <div style="font-size:12px;color:var(--text-secondary);">Filter date:</div>
         <input type="date" id="filter-date" style="width:auto;margin-bottom:0;padding:5px 8px;font-size:12px;" onchange="renderHome()">
         <button class="btn btn-sm btn-secondary" onclick="clearDateFilter()">✕</button>
+        <button class="btn btn-sm btn-secondary no-print" id="print-driver-list-btn" onclick="printDriverList()" style="display:none;">🖨️ Driver List</button>
       </div>
     </div>
   </div>
@@ -1175,6 +1176,78 @@ function clearDateFilter(){
   renderHome();
 }
 
+function printDriverList(){
+  if(!canPrintExport()){alert('Only admin and accounts can print the driver list.');return;}
+  var dateEl=document.getElementById('filter-date');
+  var date=dateEl?dateEl.value:'';
+  if(!date){alert('Please select a date using the Filter date picker first.');return;}
+
+  // Get all completed sessions for this date
+  var sessions=loadSessions().filter(function(s){return s.done&&s.date===date;});
+  if(!sessions.length){alert('No completed sessions found for '+date+'.');return;}
+
+  // Sort by truck number
+  sessions=sessions.slice().sort(function(a,b){return (a.truck||'')>(b.truck||'')?1:-1;});
+
+  var rows=sessions.map(function(s,i){
+    return '<tr style="'+(i%2===0?'background:#f9f9f9;':'')+'">'+
+      '<td style="padding:8px 10px;font-size:13px;font-weight:600;">'+(i+1)+'</td>'+
+      '<td style="padding:8px 10px;font-size:13px;font-weight:700;letter-spacing:.03em;">'+(s.truck||'-')+'</td>'+
+      '<td style="padding:8px 10px;font-size:13px;">'+(s.driver||'-')+'</td>'+
+      '<td style="padding:8px 10px;font-size:13px;font-weight:600;color:#185FA5;">'+(s.driverMobile||'—')+'</td>'+
+      '<td style="padding:8px 10px;font-size:13px;">'+(s.dest||'-')+'</td>'+
+      '<td style="padding:8px 10px;font-size:12px;color:#555;">'+(s.incharge||'-')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  // Format date for display
+  var parts=date.split('-');
+  var displayDate=parts.length===3?parts[2]+'/'+parts[1]+'/'+parts[0]:date;
+
+  var printHTML='<html><head><meta charset="UTF-8"><title>Driver List - '+displayDate+'</title><style>'+
+    '@page{margin:1.2cm;size:A4 landscape;}'+
+    '@media print{a{display:none;}}'+
+    'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;font-family:Arial,sans-serif;margin:0;padding:16px;}'+
+    'h2{font-size:18px;margin:0 0 2px;color:#111;}'+
+    '.sub{font-size:12px;color:#555;margin-bottom:14px;}'+
+    'table{width:100%;border-collapse:collapse;margin-top:8px;}'+
+    'thead tr{background:#185FA5;color:#fff;}'+
+    'th{padding:9px 10px;font-size:12px;text-align:left;font-weight:600;letter-spacing:.04em;}'+
+    'td{border-bottom:1px solid #e8e8e8;}'+
+    '.footer{margin-top:14px;font-size:11px;color:#888;border-top:1px dashed #ccc;padding-top:6px;display:flex;justify-content:space-between;}'+
+    '</style></head><body>'+
+    '<h2>MARUTI NAMKEEN — Driver List</h2>'+
+    '<div class="sub">Date: <b>'+displayDate+'</b> &nbsp;|&nbsp; Total trucks: <b>'+sessions.length+'</b></div>'+
+    '<table>'+
+      '<thead><tr>'+
+        '<th>#</th>'+
+        '<th>Truck No.</th>'+
+        '<th>Driver Name</th>'+
+        '<th>Mobile</th>'+
+        '<th>Destination</th>'+
+        '<th>Incharge</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+'</tbody>'+
+    '</table>'+
+    '<div class="footer">'+
+      '<span>Printed: '+new Date().toLocaleString('en-IN')+'</span>'+
+      '<span>Printed by: '+(CU?CU.username:'')+'</span>'+
+    '</div>'+
+    '</body></html>';
+
+  var iframe=document.getElementById('print-iframe');
+  if(!iframe){
+    iframe=document.createElement('iframe');
+    iframe.id='print-iframe';
+    iframe.style.cssText='position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;';
+    document.body.appendChild(iframe);
+  }
+  iframe.contentDocument.open();
+  iframe.contentDocument.write(printHTML);
+  iframe.contentDocument.close();
+  iframe.onload=function(){iframe.contentWindow.focus();iframe.contentWindow.print();};
+}
+
 function renderDailyTotals(sessions){
   var el=document.getElementById('daily-totals-bar');
   if(!el)return;
@@ -1301,6 +1374,13 @@ function renderHome(){
   var sortBar=document.getElementById('sort-bar');
   if(sortBar) sortBar.style.display=(homeFilter==='done'&&canViewCompleted())?'block':'none';
 
+  // Show/hide Print Driver List button — only when date filter is active and user is admin/accounts
+  var printDriverBtn=document.getElementById('print-driver-list-btn');
+  if(printDriverBtn){
+    var fdVal=document.getElementById('filter-date')?document.getElementById('filter-date').value:'';
+    printDriverBtn.style.display=(homeFilter==='done'&&canPrintExport()&&fdVal)?'':'none';
+  }
+
   // Apply date filter + sort on Completed tab
   if(homeFilter==='done'){
     var filterDate=document.getElementById('filter-date');
@@ -1330,7 +1410,7 @@ function renderHome(){
     <div class="session-card">
       <div class="session-info" onclick="openSession('${s.id}')">
         <div class="session-truck">${s.truck}<span class="badge badge-${s.truckType==='large'?'large':'small'}">${s.truckType==='large'?'Large':'Small'}</span></div>
-        <div class="session-meta">${s.driver}${s.incharge?' · IC: '+s.incharge:''} · ${s.date} · ${s.rows} rows</div>
+        <div class="session-meta">${s.driver}${s.driverMobile?' · 📞 '+s.driverMobile:''}${s.incharge?' · IC: '+s.incharge:''} · ${s.date} · ${s.rows} rows</div>
         ${s.dest?`<div class="session-dest">→ ${s.dest}</div>`:''}
         ${s.startTime?`<div class="session-time">Started ${fmt12(s.startTime)}${s.endTime?' · Finished '+fmt12(s.endTime):''}</div>`:''}
         ${isAdmin()&&s.createdBy?`<div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">👤 Created by: <b>${s.createdBy}</b></div>`:''}
