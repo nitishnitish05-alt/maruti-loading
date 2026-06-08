@@ -927,13 +927,12 @@ function startCloudListener(){
         var pd=document.getElementById('ft-pending-date');
         if(pd&&pd.value)renderPendingFreight(pd.value);
       }
-      // Refresh by-truck ledger if Ledger > By Truck is active and a search result is showing
+      // Call render functions directly — data already fresh in localStorage from listener
       if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
-        searchTruckLedger();
-      // Refresh by-date ledger if Ledger > By Date is active and date is set
+        _renderTruckLedger();
       if(freightTab==='ledger'&&ledgerView==='date'){
         var fdDate=document.getElementById('fl-date-input');
-        if(fdDate&&fdDate.value)searchDateLedger();
+        if(fdDate&&fdDate.value)_renderDateLedger();
       }
     });
   }
@@ -942,9 +941,9 @@ function startCloudListener(){
   if(window._fb.listenFreightPayments){
     fbPayListener=window._fb.listenFreightPayments(function(allPayments){
       SS(K.FREIGHT_PAYMENTS,allPayments);
-      // Refresh by-truck ledger if active — payments affect outstanding balance
+      // Call render directly — data already fresh in localStorage
       if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
-        searchTruckLedger();
+        _renderTruckLedger();
     });
   }
 }
@@ -3254,10 +3253,10 @@ function initFreightScreen(){
         var pd=document.getElementById('ft-pending-date');
         if(pd&&pd.value) renderPendingFreight(pd.value);
       }
-      if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck) searchTruckLedger();
+      if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck) _renderTruckLedger();
       if(freightTab==='ledger'&&ledgerView==='date'){
         var fd=document.getElementById('fl-date-input');
-        if(fd&&fd.value) searchDateLedger();
+        if(fd&&fd.value) _renderDateLedger();
       }
     }).catch(function(){});
   }
@@ -3383,7 +3382,7 @@ function saveFreightEdit(){
   if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
     window._fb.saveFreightEntry(e).catch(function(){});
   closeFreightEditModal();
-  searchTruckLedger();
+  _renderTruckLedger();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3396,7 +3395,7 @@ function deleteFreightEntryById(id){
     saveFreightEntriesLocal(entries);
     if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightEntry)
       window._fb.deleteFreightEntry(id).catch(function(){});
-    searchTruckLedger();
+    _renderTruckLedger();
   });
 }
 function deleteFreightPaymentById(id){
@@ -3406,7 +3405,7 @@ function deleteFreightPaymentById(id){
     saveFreightPaymentsLocal(payments);
     if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightPayment)
       window._fb.deleteFreightPayment(id).catch(function(){});
-    searchTruckLedger();
+    _renderTruckLedger();
   });
 }
 
@@ -3429,7 +3428,7 @@ function saveFreightPaymentInline(){
   saveFreightPaymentsLocal(payments);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightPayment)
     window._fb.saveFreightPayment(payment).catch(function(){});
-  searchTruckLedger(); // refresh results
+  _renderTruckLedger(); // refresh results
 }
 
 function addFreightPayment(truckNo){
@@ -3441,7 +3440,27 @@ function addFreightPayment(truckNo){
 // ═══════════════════════════════════════════════════════
 // LEDGER — BY TRUCK
 // ═══════════════════════════════════════════════════════
-function searchTruckLedger(){
+// ═══════════════════════════════════════════════════════
+// FREIGHT SYNC HELPER — always fetches live data from Firebase, then calls cb
+// Used by search functions so every user-triggered search is guaranteed fresh
+// ═══════════════════════════════════════════════════════
+function fetchFreshFreight(cb){
+  if(fbOK&&isOnline&&window._fb){
+    Promise.all([
+      window._fb.loadFreightEntries?window._fb.loadFreightEntries():Promise.resolve(null),
+      window._fb.loadFreightPayments?window._fb.loadFreightPayments():Promise.resolve(null)
+    ]).then(function(res){
+      if(res[0])SS(K.FREIGHT_ENTRIES,res[0]);
+      if(res[1])SS(K.FREIGHT_PAYMENTS,res[1]);
+      cb();
+    }).catch(function(){cb();});
+  } else { cb(); }
+}
+// Public search functions — always fetch fresh from Firebase first, then render
+function searchTruckLedger(){fetchFreshFreight(function(){_renderTruckLedger();});}
+function searchDateLedger(){fetchFreshFreight(function(){_renderDateLedger();});}
+
+function _renderTruckLedger(){
   var truck=(document.getElementById('fl-truck-input').value||'').trim().toUpperCase();
   var result=document.getElementById('fl-truck-result');
   if(!truck){result.innerHTML='<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:20px;">Enter a truck number and tap Search.</div>';return;}
@@ -3540,7 +3559,7 @@ function searchTruckLedger(){
 // ═══════════════════════════════════════════════════════
 // LEDGER — BY DATE
 // ═══════════════════════════════════════════════════════
-function searchDateLedger(){
+function _renderDateLedger(){
   var date=document.getElementById('fl-date-input').value;
   var result=document.getElementById('fl-date-result');
   if(!date){result.innerHTML='';return;}
@@ -3656,7 +3675,7 @@ function toggleReceiptStatus(id){
       saveFreightEntriesLocal(entries);
       if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
         window._fb.saveFreightEntry(e).catch(function(){});
-      searchTruckLedger();
+      _renderTruckLedger();
     });
   } else {
     // Mark received — admin and accounts
@@ -3667,7 +3686,7 @@ function toggleReceiptStatus(id){
     saveFreightEntriesLocal(entries);
     if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
       window._fb.saveFreightEntry(e).catch(function(){});
-    searchTruckLedger();
+    _renderTruckLedger();
   }
 }
 
