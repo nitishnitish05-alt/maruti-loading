@@ -829,6 +829,10 @@ async function syncQueue(){
       else if(item.type==='contractors'&&window._fb.saveContractors){const ok=await window._fb.saveContractors(loadContractors());if(ok)delPQ('contractors','contractors');else fail++;}
       else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
       else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
+      else if(item.type==='freight_entry'&&window._fb.saveFreightEntry){const fe=loadFreightEntries().find(x=>x.id===item.id);if(fe){const ok=await window._fb.saveFreightEntry(fe);if(ok)delPQ('freight_entry',item.id);else fail++;}else delPQ('freight_entry',item.id);}
+      else if(item.type==='freight_payment'&&window._fb.saveFreightPayment){const fp=loadFreightPayments().find(x=>x.id===item.id);if(fp){const ok=await window._fb.saveFreightPayment(fp);if(ok)delPQ('freight_payment',item.id);else fail++;}else delPQ('freight_payment',item.id);}
+      else if(item.type==='freight_entry_delete'&&window._fb.deleteFreightEntry){const ok=await window._fb.deleteFreightEntry(item.id);if(ok)delPQ('freight_entry_delete',item.id);else fail++;}
+      else if(item.type==='freight_payment_delete'&&window._fb.deleteFreightPayment){const ok=await window._fb.deleteFreightPayment(item.id);if(ok)delPQ('freight_payment_delete',item.id);else fail++;}
     }catch(e){fail++;}
   }
   if(fail)setSyncBar('error',`${fail} item(s) failed — will retry`);
@@ -927,7 +931,7 @@ function startCloudListener(){
         var pd=document.getElementById('ft-pending-date');
         if(pd&&pd.value)renderPendingFreight(pd.value);
       }
-      // Call render functions directly — data already fresh in localStorage from listener
+      // Data already fresh in localStorage from listener — call render directly
       if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
         _renderTruckLedger();
       if(freightTab==='ledger'&&ledgerView==='date'){
@@ -941,7 +945,7 @@ function startCloudListener(){
   if(window._fb.listenFreightPayments){
     fbPayListener=window._fb.listenFreightPayments(function(allPayments){
       SS(K.FREIGHT_PAYMENTS,allPayments);
-      // Call render directly — data already fresh in localStorage
+      // Data already fresh in localStorage from listener — call render directly
       if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
         _renderTruckLedger();
     });
@@ -3319,8 +3323,9 @@ function addFreightEntry(){
   var entries=loadFreightEntries();
   entries.push(entry);
   saveFreightEntriesLocal(entries);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
-    window._fb.saveFreightEntry(entry).catch(function(){});
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
+    window._fb.saveFreightEntry(entry).then(function(ok){if(!ok)addPQ('freight_entry',entry.id);}).catch(function(){addPQ('freight_entry',entry.id);});
+  } else { addPQ('freight_entry',entry.id); }
 
   // Clear form
   document.getElementById('ft-truck').value='';
@@ -3379,8 +3384,9 @@ function saveFreightEdit(){
   e.receiptReceived=document.getElementById('fem-receipt').checked;
   e.notes=document.getElementById('fem-notes').value.trim();
   saveFreightEntriesLocal(entries);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
-    window._fb.saveFreightEntry(e).catch(function(){});
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
+    window._fb.saveFreightEntry(e).then(function(ok){if(!ok)addPQ('freight_entry',e.id);}).catch(function(){addPQ('freight_entry',e.id);});
+  } else { addPQ('freight_entry',e.id); }
   closeFreightEditModal();
   _renderTruckLedger();
 }
@@ -3393,8 +3399,9 @@ function deleteFreightEntryById(id){
   showModal('Delete entry','Permanently delete this freight trip entry?',function(){
     var entries=loadFreightEntries().filter(function(e){return e.id!==id;});
     saveFreightEntriesLocal(entries);
-    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightEntry)
-      window._fb.deleteFreightEntry(id).catch(function(){});
+    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightEntry){
+      window._fb.deleteFreightEntry(id).then(function(ok){if(!ok)addPQ('freight_entry_delete',id);}).catch(function(){addPQ('freight_entry_delete',id);});
+    } else { addPQ('freight_entry_delete',id); }
     _renderTruckLedger();
   });
 }
@@ -3403,8 +3410,9 @@ function deleteFreightPaymentById(id){
   showModal('Delete payment','Permanently delete this payment record?',function(){
     var payments=loadFreightPayments().filter(function(p){return p.id!==id;});
     saveFreightPaymentsLocal(payments);
-    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightPayment)
-      window._fb.deleteFreightPayment(id).catch(function(){});
+    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightPayment){
+      window._fb.deleteFreightPayment(id).then(function(ok){if(!ok)addPQ('freight_payment_delete',id);}).catch(function(){addPQ('freight_payment_delete',id);});
+    } else { addPQ('freight_payment_delete',id); }
     _renderTruckLedger();
   });
 }
@@ -3426,8 +3434,9 @@ function saveFreightPaymentInline(){
   var payments=loadFreightPayments();
   payments.push(payment);
   saveFreightPaymentsLocal(payments);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightPayment)
-    window._fb.saveFreightPayment(payment).catch(function(){});
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightPayment){
+    window._fb.saveFreightPayment(payment).then(function(ok){if(!ok)addPQ('freight_payment',payment.id);}).catch(function(){addPQ('freight_payment',payment.id);});
+  } else { addPQ('freight_payment',payment.id); }
   _renderTruckLedger(); // refresh results
 }
 
@@ -3441,8 +3450,8 @@ function addFreightPayment(truckNo){
 // LEDGER — BY TRUCK
 // ═══════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════
-// FREIGHT SYNC HELPER — always fetches live data from Firebase, then calls cb
-// Used by search functions so every user-triggered search is guaranteed fresh
+// FREIGHT SYNC HELPER — fetches live data from Firebase before rendering
+// Guarantees search always shows current data across all devices/browsers
 // ═══════════════════════════════════════════════════════
 function fetchFreshFreight(cb){
   if(fbOK&&isOnline&&window._fb){
@@ -3456,7 +3465,6 @@ function fetchFreshFreight(cb){
     }).catch(function(){cb();});
   } else { cb(); }
 }
-// Public search functions — always fetch fresh from Firebase first, then render
 function searchTruckLedger(){fetchFreshFreight(function(){_renderTruckLedger();});}
 function searchDateLedger(){fetchFreshFreight(function(){_renderDateLedger();});}
 
@@ -3673,8 +3681,9 @@ function toggleReceiptStatus(id){
     showModal('Revert Receipt','Mark this entry as receipt pending?',function(){
       e.receiptReceived=false;e.receiptDate='';
       saveFreightEntriesLocal(entries);
-      if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
-        window._fb.saveFreightEntry(e).catch(function(){});
+      if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
+        window._fb.saveFreightEntry(e).then(function(ok){if(!ok)addPQ('freight_entry',e.id);}).catch(function(){addPQ('freight_entry',e.id);});
+      } else { addPQ('freight_entry',e.id); }
       _renderTruckLedger();
     });
   } else {
@@ -3684,8 +3693,9 @@ function toggleReceiptStatus(id){
     d=d.trim()||getISTDate();
     e.receiptReceived=true;e.receiptDate=d;
     saveFreightEntriesLocal(entries);
-    if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry)
-      window._fb.saveFreightEntry(e).catch(function(){});
+    if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
+      window._fb.saveFreightEntry(e).then(function(ok){if(!ok)addPQ('freight_entry',e.id);}).catch(function(){addPQ('freight_entry',e.id);});
+    } else { addPQ('freight_entry',e.id); }
     _renderTruckLedger();
   }
 }
