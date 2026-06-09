@@ -672,7 +672,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       </div>
       <div class="field-label">Notes</div>
       <input type="text" id="ft-notes" placeholder="Optional remarks">
-      <button class="btn btn-primary" onclick="addFreightEntry()">Save Trip</button>
+      <button class="btn btn-primary" id="ft-save-btn" onclick="addFreightEntry()">Save Trip</button>
     </div>
   </div>
 
@@ -926,7 +926,11 @@ function startCloudListener(){
   if(fbFreightListener){fbFreightListener();fbFreightListener=null;}
   if(window._fb.listenFreight){
     fbFreightListener=window._fb.listenFreight(function(allEntries){
-      SS(K.FREIGHT_ENTRIES,allEntries);
+      // Deduplicate by id before saving — last-write-wins for same id
+      var seen={};
+      var deduped=[];
+      allEntries.forEach(function(e){if(e.id&&!seen[e.id]){seen[e.id]=true;deduped.push(e);}});
+      SS(K.FREIGHT_ENTRIES,deduped);
       // Refresh pending freight panel if Add Trip tab is active and date is set
       if(freightTab==='add'){
         var pd=document.getElementById('ft-pending-date');
@@ -3376,6 +3380,14 @@ function calcFreightBalance(){
 }
 
 function addFreightEntry(){
+  // Prevent double-submit — disable button immediately
+  var saveBtn=document.getElementById('ft-save-btn');
+  if(saveBtn){
+    if(saveBtn.disabled)return; // already processing
+    saveBtn.disabled=true;
+    saveBtn.textContent='Saving...';
+  }
+
   var truck=document.getElementById('ft-truck').value.trim().toUpperCase();
   var date=document.getElementById('ft-date').value;
   var dest=document.getElementById('ft-dest').value.trim();
@@ -3387,20 +3399,27 @@ function addFreightEntry(){
   var notes=document.getElementById('ft-notes').value.trim();
   var errEl=document.getElementById('ft-truck-err');
 
-  if(!truck){alert('Please enter truck number.');return;}
-  if(!validateTruckNo(truck)){errEl.style.display='block';document.getElementById('ft-truck').focus();return;}
-  errEl.style.display='none';
-  if(!date){alert('Please select a date.');return;}
-  if(!dest){alert('Please enter destination.');return;}
-  if(total<=0){alert('Please enter total freight amount.');return;}
-  if(adv<0||cust<0){alert('Advance and customer payable cannot be negative.');return;}
-  if(adv+cust>total){alert('Advance + Customer Payable cannot exceed Total Freight.');return;}
+  function resetBtn(){
+    if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Trip';}
+  }
 
-  var entry={id:'FE'+Date.now(),truckNo:truck,date:date,destination:dest,
+  if(!truck){alert('Please enter truck number.');resetBtn();return;}
+  if(!validateTruckNo(truck)){errEl.style.display='block';document.getElementById('ft-truck').focus();resetBtn();return;}
+  errEl.style.display='none';
+  if(!date){alert('Please select a date.');resetBtn();return;}
+  if(!dest){alert('Please enter destination.');resetBtn();return;}
+  if(total<=0){alert('Please enter total freight amount.');resetBtn();return;}
+  if(adv<0||cust<0){alert('Advance and customer payable cannot be negative.');resetBtn();return;}
+  if(adv+cust>total){alert('Advance + Customer Payable cannot exceed Total Freight.');resetBtn();return;}
+
+  // Use high-resolution timestamp + random suffix to guarantee unique ID
+  var uniqueId='FE'+Date.now()+'_'+Math.random().toString(36).substr(2,6);
+  var entry={id:uniqueId,truckNo:truck,date:date,destination:dest,
     totalFreight:total,advance:adv,customerPayable:cust,balanceByUs:balance,
     receiptReceived:receipt,notes:notes,addedBy:CU.username,createdAt:Date.now()};
 
-  var entries=loadFreightEntries();
+  // Deduplicate before saving — prevent any race condition duplicates
+  var entries=loadFreightEntries().filter(function(e){return e.id!==entry.id;});
   entries.push(entry);
   saveFreightEntriesLocal(entries);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
@@ -3416,6 +3435,8 @@ function addFreightEntry(){
   document.getElementById('ft-balance').value='';
   document.getElementById('ft-receipt').checked=false;
   document.getElementById('ft-notes').value='';
+  // Re-enable button before alert so user can save next entry immediately after dismissing
+  if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Save Trip';}
   alert('Trip saved successfully!');
   var pd=document.getElementById('ft-pending-date');
   if(pd&&pd.value) renderPendingFreight(pd.value);
