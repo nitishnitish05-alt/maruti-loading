@@ -238,7 +238,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="modal-box">
     <div class="modal-title">Edit Freight Entry</div>
     <div class="field-label">Destination</div>
-    <input type="text" id="fem-dest" placeholder="Destination">
+    <select id="fem-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
     <div class="inline-row" style="margin-bottom:0;">
       <div><div class="field-label">Total Freight ₹</div><input type="number" id="fem-total" min="0" oninput="femCalcBalance()"></div>
       <div><div class="field-label">Advance Paid ₹</div><input type="number" id="fem-advance" min="0" oninput="femCalcBalance()"></div>
@@ -336,6 +336,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="admin-tabs">
     <button class="admin-tab active" onclick="adminTab('users',this)">Users</button>
     <button class="admin-tab" onclick="adminTab('skus',this)">SKU Master</button>
+    <button class="admin-tab" onclick="adminTab('destinations',this)">📍 Destinations</button>
     <button class="admin-tab" onclick="adminTab('contractors',this)">Contractors</button>
     <button class="admin-tab" onclick="adminTab('merge',this)">🔀 Merge SKUs</button>
   </div>
@@ -374,6 +375,17 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <button class="btn btn-primary" style="margin-top:10px;" onclick="addSKU()">+ Add SKU</button>
     </div>
     <div class="card"><div id="sku-list"></div></div>
+  </div>
+  <div id="panel-destinations" style="display:none;">
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:4px;">Add new destination</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">All users will be required to select from this list when creating sessions or freight entries.</div>
+      <div class="inline-row" style="align-items:flex-end;">
+        <input type="text" id="new-dest-name" placeholder="e.g. Lucknow Godown" style="margin-bottom:0;">
+        <button class="btn btn-primary" onclick="addDestination()" style="white-space:nowrap;">+ Add</button>
+      </div>
+    </div>
+    <div class="card"><div id="dest-list"></div></div>
   </div>
   <div id="panel-contractors" style="display:none;">
     <div class="card">
@@ -421,7 +433,9 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div><div class="field-label">Driver mobile *</div><input type="number" id="ns-driver-mobile" placeholder="10-digit mobile"></div>
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="ns-incharge" placeholder="e.g. Ramesh Singh">
-    <div class="field-label">Destination / Route</div><input type="text" id="ns-dest" placeholder="e.g. Lucknow Godown">
+    <div class="field-label">Destination / Route *</div>
+    <select id="ns-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
+    <div class="field-error" id="ns-dest-err" style="display:none;">Please select a destination from the list.</div>
     <div class="field-label">Truck size</div>
     <div class="truck-grid">
       <div class="truck-btn selected" id="tt-small" onclick="selectTruck('small')">
@@ -453,7 +467,8 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div><div class="field-label">Driver mobile *</div><input type="number" id="es-driver-mobile" placeholder="10-digit mobile"></div>
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="es-incharge">
-    <div class="field-label">Destination / Route</div><input type="text" id="es-dest">
+    <div class="field-label">Destination / Route *</div>
+    <select id="es-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
     <button class="btn btn-primary" onclick="saveEditSession()">Save changes</button>
     <button class="btn btn-secondary" onclick="cancelEditSession()">Cancel</button>
   </div>
@@ -657,7 +672,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div class="field-label">Date *</div>
       <input type="date" id="ft-date">
       <div class="field-label">Destination *</div>
-      <input type="text" id="ft-dest" placeholder="e.g. Lucknow">
+      <select id="ft-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
       <div class="inline-row" style="margin-bottom:0;">
         <div><div class="field-label">Total Freight &#8377;</div><input type="number" id="ft-total" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
         <div><div class="field-label">Advance Paid &#8377;</div><input type="number" id="ft-advance" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
@@ -759,8 +774,8 @@ try {
     async loadSessions(){try{const sn=await _db.collection("sessions").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
     async saveUsers(u){try{await _db.collection("config").doc("users").set({list:u});return true;}catch(e){return false;}},
     async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
-    async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveDestinations(d){try{await _db.collection("config").doc("destinations").set({list:d});return true;}catch(e){return false;}},
+    async loadDestinations(){try{const sn=await _db.collection("config").doc("destinations").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){return false;}},
     async loadContractors(){try{const sn=await _db.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveProdEntry(e){try{await _db.collection("prod_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
@@ -788,7 +803,7 @@ try {
 }
 </script>
 <script>
-const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1',FREIGHT_ENTRIES:'tl_freight_m1',FREIGHT_PAYMENTS:'tl_freight_pay_m1'};
+const K={USERS:'tl_u_m1',SKUS:'tl_s_m1',SESSIONS:'tl_sess_m1',PENDING:'tl_pend_m1',FREIGHT_ENTRIES:'tl_freight_m1',FREIGHT_PAYMENTS:'tl_freight_pay_m1',DESTINATIONS:'tl_dest_m1'};
 let CU=null,curSessId=null,homeFilter='active',truckType='small';
 let sortOrder='desc'; // 'desc' = newest first, 'asc' = oldest first
 let pendingModal=null,editSessId=null,elTimer=null,editFromLoading=false;
@@ -827,6 +842,7 @@ async function syncQueue(){
       if(item.type==='session'){const s=loadSessions().find(x=>x.id===item.id);if(s){const ok=await window._fb.saveSession(s);if(ok)delPQ('session',item.id);else fail++;}else delPQ('session',item.id);}
       else if(item.type==='users'){const ok=await window._fb.saveUsers(loadUsersLocal());if(ok)delPQ('users','users');else fail++;}
       else if(item.type==='skus'){const ok=await window._fb.saveSKUs(loadSKUsLocal());if(ok)delPQ('skus','skus');else fail++;}
+      else if(item.type==='destinations'){const ok=await window._fb.saveDestinations(loadDestinationsLocal());if(ok)delPQ('destinations','destinations');else fail++;}
       else if(item.type==='contractors'&&window._fb.saveContractors){const ok=await window._fb.saveContractors(loadContractors());if(ok)delPQ('contractors','contractors');else fail++;}
       else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
       else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
@@ -849,6 +865,7 @@ async function pullCloud(){
   try{
     const cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
     const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
+    const cd=await window._fb.loadDestinations();if(cd)SS(K.DESTINATIONS,cd);
     const csess=await window._fb.loadSessions();
     if(csess&&csess.length){
       const loc=loadSessions();
@@ -967,6 +984,26 @@ function loadSKUsLocal(){return LS(K.SKUS)||[{id:1,name:'Kala Bhoot',unit:'bag'}
 function loadSKUs(){return loadSKUsLocal();}
 async function saveSKUsSmart(s){SS(K.SKUS,s);if(fbOK&&isOnline){const ok=await window._fb.saveSKUs(s);if(!ok)addPQ('skus','skus');}else addPQ('skus','skus');}
 function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
+function loadDestinationsLocal(){return LS(K.DESTINATIONS)||[];}
+async function saveDestinationsSmart(d){SS(K.DESTINATIONS,d);if(fbOK&&isOnline&&window._fb){const ok=await window._fb.saveDestinations(d);if(!ok)addPQ('destinations','destinations');}else addPQ('destinations','destinations');}
+function saveDestinations(d){SS(K.DESTINATIONS,d);saveDestinationsSmart(d);}
+// Helper: populate a <select> with active destinations; adds legacy option if currentValue not in list
+function populateDestSelect(selectId,currentValue){
+  var sel=document.getElementById(selectId);if(!sel)return;
+  var dests=loadDestinationsLocal().filter(function(d){return !d.disabled;});
+  sel.innerHTML='<option value="">— Select destination —</option>';
+  if(currentValue&&!dests.find(function(d){return d.name===currentValue;})){
+    var leg=document.createElement('option');
+    leg.value=currentValue;leg.textContent=currentValue+' ★';
+    leg.style.color='#888';sel.appendChild(leg);
+  }
+  dests.forEach(function(d){
+    var opt=document.createElement('option');
+    opt.value=d.name;opt.textContent=d.name;
+    if(d.name===currentValue)opt.selected=true;
+    sel.appendChild(opt);
+  });
+}
 function loadSessions(){return LS(K.SESSIONS)||[];}
 function saveSessions(s){SS(K.SESSIONS,s);}
 function isAdmin(){return CU&&CU.role==='admin';}
@@ -1025,6 +1062,7 @@ async function doLogin(){
     try{
       const cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
       const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
+      const cd=await window._fb.loadDestinations();if(cd)SS(K.DESTINATIONS,cd);
     }catch(e){}
   }
 
@@ -1122,7 +1160,7 @@ function goTo(s){
   target.classList.add('active');
   window.history.pushState({screen:s}, '', '');
   if(s==='screen-home')renderHome();
-  if(s==='screen-admin'){renderAdminUsers();renderSKUs();}
+  if(s==='screen-admin'){renderAdminUsers();renderSKUs();renderDestinations();}
   if(s==='screen-login')initLogin();
   if(s==='screen-stock-home')renderStockHome();
   if(s==='screen-add-production-stock')initProdStockForm();
@@ -1434,10 +1472,12 @@ function adminTab(tab,btn){
   document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
   document.getElementById('panel-users').style.display=tab==='users'?'':'none';
   document.getElementById('panel-skus').style.display=tab==='skus'?'':'none';
+  document.getElementById('panel-destinations').style.display=tab==='destinations'?'':'none';
   document.getElementById('panel-contractors').style.display=tab==='contractors'?'':'none';
   document.getElementById('panel-merge').style.display=tab==='merge'?'':'none';
   if(tab==='users')renderAdminUsers();
   if(tab==='skus')renderSKUs();
+  if(tab==='destinations')renderDestinations();
   if(tab==='contractors')renderContractors();
   if(tab==='merge')initMergePanel();
 }
@@ -1514,7 +1554,63 @@ function editSKU(id){
   sk.name=trimmed;sk.unit=newUnit.trim()||sk.unit;saveSKUs(skus);renderSKUs();
 }
 
-// Sessions
+// ═══════════════════════════════════════════════════════
+// DESTINATION MASTER — Admin only
+// ═══════════════════════════════════════════════════════
+function renderDestinations(){
+  var dests=loadDestinationsLocal();
+  var el=document.getElementById('dest-list');if(!el)return;
+  el.innerHTML=dests.length
+    ?dests.map(function(d){
+      var dis=d.disabled||false;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">'+
+        '<div>'+
+          '<div style="font-size:14px;font-weight:600;'+(dis?'color:var(--text-secondary);text-decoration:line-through;':'')+'">'+d.name+'</div>'+
+          (dis?'<div style="font-size:11px;color:var(--text-secondary);">Disabled — hidden from pickers</div>':'')
+        +'</div>'+
+        '<div style="display:flex;gap:6px;">'+
+          '<button class="btn btn-sm" style="background:#2d6a9f;color:#fff;" onclick="editDestination(\''+d.id+'\')">Rename</button>'+
+          '<button class="btn btn-sm" style="'+(dis?'background:#27ae60;color:#fff;':'background:#e17055;color:#fff;')+'" onclick="toggleDestination(\''+d.id+'\')">'+(dis?'Enable':'Disable')+'</button>'+
+          '<button class="btn btn-sm btn-danger" onclick="deleteDestination(\''+d.id+'\')">Remove</button>'+
+        '</div>'+
+      '</div>';
+    }).join('')
+    :'<div style="font-size:13px;color:var(--text-secondary);text-align:center;padding:12px;">No destinations yet. Add your first destination above.</div>';
+}
+function addDestination(){
+  var name=document.getElementById('new-dest-name').value.trim();
+  if(!name){alert('Please enter a destination name.');return;}
+  var dests=loadDestinationsLocal();
+  if(dests.find(function(d){return d.name.toLowerCase()===name.toLowerCase();})){
+    alert('"'+name+'" already exists in the destination list.');return;
+  }
+  dests.push({id:'D'+Date.now(),name:name,disabled:false});
+  saveDestinations(dests);
+  document.getElementById('new-dest-name').value='';
+  renderDestinations();
+}
+function toggleDestination(id){
+  var dests=loadDestinationsLocal();
+  var d=dests.find(function(x){return x.id===id;});if(!d)return;
+  d.disabled=!(d.disabled||false);
+  saveDestinations(dests);renderDestinations();
+}
+function editDestination(id){
+  var dests=loadDestinationsLocal();
+  var d=dests.find(function(x){return x.id===id;});if(!d)return;
+  var newName=prompt('Rename destination:',d.name);if(newName===null)return;
+  var trimmed=newName.trim();if(!trimmed){alert('Destination name cannot be empty.');return;}
+  if(dests.find(function(x){return x.id!==id&&x.name.toLowerCase()===trimmed.toLowerCase();})){
+    alert('"'+trimmed+'" already exists.');return;
+  }
+  alert('Note: Renaming does not update existing sessions or freight entries already saved with the old name.');
+  d.name=trimmed;saveDestinations(dests);renderDestinations();
+}
+function deleteDestination(id){
+  if(!confirm('Remove this destination? This cannot be undone.'))return;
+  var dests=loadDestinationsLocal().filter(function(x){return x.id!==id;});
+  saveDestinations(dests);renderDestinations();
+}
 function getSess(id){return loadSessions().find(s=>s.id===id);}
 function saveSess(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id);if(i>=0)ss[i]=sess;else ss.push(sess);saveSessions(ss);}
 function persistLive(){const s=getSess(curSessId);if(!s)return;s.rowData=clone(liveRows);saveSess(s);}
@@ -1557,7 +1653,7 @@ function startEditSess(id,fromLoading){
   document.getElementById('es-driver').value=s.driver||'';
   document.getElementById('es-driver-mobile').value=s.driverMobile||'';
   document.getElementById('es-incharge').value=s.incharge||'';
-  document.getElementById('es-dest').value=s.dest||'';
+  populateDestSelect('es-dest',s.dest||'');
   document.getElementById('es-truck-err').style.display='none';
   goTo('screen-edit-session');
 }
@@ -1610,7 +1706,11 @@ function createSession(){
   if(!/^[6-9][0-9]{9}$/.test(driverMobile)){alert('Driver mobile must be a valid 10-digit Indian mobile number.');return;}
   if(!incharge){alert('Loading incharge name is required.');return;}
   if(!/^[A-Za-z ]+$/.test(incharge)){alert('Loading incharge name must contain letters only.');return;}
-  if(!dest){alert('Destination is required.');return;}
+  if(!dest){
+    var nsde=document.getElementById('ns-dest-err');if(nsde)nsde.style.display='block';
+    alert('Destination is required.');return;
+  }
+  if(document.getElementById('ns-dest-err'))document.getElementById('ns-dest-err').style.display='none';
   const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
   const newSess={id,date,truck,driver,driverMobile:driverMobile||'',incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
   const ss=loadSessions();ss.push(newSess);saveSessions(ss);
@@ -3256,9 +3356,11 @@ function getISTDate(){
 function initNewSession(){
   requestAnimationFrame(function(){window.scrollTo(0,0);document.documentElement.scrollTop=0;document.body.scrollTop=0;});
   // Clear all fields so previous session data doesn't persist
-  ['ns-truck','ns-driver','ns-driver-mobile','ns-incharge','ns-dest'].forEach(function(id){
+  ['ns-truck','ns-driver','ns-driver-mobile','ns-incharge'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
+  populateDestSelect('ns-dest',''); // fresh destination list, nothing selected
+  var nsDestErr=document.getElementById('ns-dest-err');if(nsDestErr)nsDestErr.style.display='none';
   var errEl=document.getElementById('ns-truck-err'); if(errEl) errEl.style.display='none';
   var d=document.getElementById('ns-date');
   d.value=getISTDate();
@@ -3327,6 +3429,7 @@ function initFreightScreen(){
   if(flDate&&!flDate.value) flDate.value=today;
   var fpDate=document.getElementById('ft-pending-date');
   if(fpDate) fpDate.value=today;
+  populateDestSelect('ft-dest',''); // populate destination dropdown
   switchFreightTab(freightTab);
   // Always pull fresh freight data from Firebase when opening this screen
   if(fbOK&&isOnline&&window._fb){
@@ -3428,7 +3531,7 @@ function addFreightEntry(){
 
   // Clear form
   document.getElementById('ft-truck').value='';
-  document.getElementById('ft-dest').value='';
+  populateDestSelect('ft-dest',''); // reset destination select
   document.getElementById('ft-total').value='';
   document.getElementById('ft-advance').value='';
   document.getElementById('ft-customer').value='';
@@ -3457,7 +3560,7 @@ function openFreightEditModal(id){
   var e=loadFreightEntries().find(function(x){return x.id===id;});
   if(!e)return;
   freightEditId=id;
-  document.getElementById('fem-dest').value=e.destination||'';
+  populateDestSelect('fem-dest',e.destination||'');
   document.getElementById('fem-total').value=e.totalFreight||0;
   document.getElementById('fem-advance').value=e.advance||0;
   document.getElementById('fem-customer').value=e.customerPayable||0;
@@ -3859,7 +3962,7 @@ function selectPendingSession(idx){
   if(!s)return;
   var truck=autoFmtTruckVal(s.truck||'');
   document.getElementById('ft-truck').value=truck;
-  document.getElementById('ft-dest').value=s.dest||'';
+  populateDestSelect('ft-dest',s.dest||''); // ensure legacy dest shows as option if not in master list
   document.getElementById('ft-date').value=s.date||getISTDate();
   var errEl=document.getElementById('ft-truck-err');if(errEl)errEl.style.display='none';
   // Reset amounts
