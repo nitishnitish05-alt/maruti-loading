@@ -922,6 +922,9 @@ async function pullCloud(){
     if(window._fb.loadFreightPayments){
       const cfp=await window._fb.loadFreightPayments();if(cfp)SS(K.FREIGHT_PAYMENTS,cfp);
     }
+    if(window._fb.loadDestinations){
+      const cdest=await window._fb.loadDestinations();if(cdest)SS(K.DESTINATIONS,cdest);
+    }
   }catch(e){}
 }
 
@@ -3417,6 +3420,11 @@ function initNewSession(){
     d.readOnly=false;
     d.style.background='';d.style.color='';d.style.cursor='';
   }
+  // Silently refresh destinations from Firebase in background
+  // so any destinations added by admin after login appear immediately
+  if(fbOK&&isOnline&&window._fb&&window._fb.loadDestinations){
+    window._fb.loadDestinations().then(function(d){if(d)SS(K.DESTINATIONS,d);}).catch(function(){});
+  }
 }
 
 function autoFmtTruck(el){
@@ -3475,14 +3483,16 @@ function initFreightScreen(){
   if(fpDate) fpDate.value=today;
   var ftDestInp=document.getElementById('ft-dest');if(ftDestInp)ftDestInp.value='';
   switchFreightTab(freightTab);
-  // Always pull fresh freight data from Firebase when opening this screen
+  // Always pull fresh freight + destination data from Firebase when opening this screen
   if(fbOK&&isOnline&&window._fb){
     Promise.all([
       window._fb.loadFreightEntries&&window._fb.loadFreightEntries(),
-      window._fb.loadFreightPayments&&window._fb.loadFreightPayments()
+      window._fb.loadFreightPayments&&window._fb.loadFreightPayments(),
+      window._fb.loadDestinations&&window._fb.loadDestinations()
     ]).then(function(results){
       if(results[0]) SS(K.FREIGHT_ENTRIES,results[0]);
       if(results[1]) SS(K.FREIGHT_PAYMENTS,results[1]);
+      if(results[2]) SS(K.DESTINATIONS,results[2]);
       // Re-render whichever view is active with fresh data
       if(freightTab==='add'){
         var pd=document.getElementById('ft-pending-date');
