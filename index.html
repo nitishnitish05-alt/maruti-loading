@@ -238,7 +238,10 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div class="modal-box">
     <div class="modal-title">Edit Freight Entry</div>
     <div class="field-label">Destination</div>
-    <select id="fem-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
+    <div class="sku-ac-wrap">
+      <input class="sku-ac-input" type="text" id="fem-dest" placeholder="Type to search destination..." autocomplete="off" oninput="destSearch('fem-dest','fem-dest-list')" onfocus="destSearch('fem-dest','fem-dest-list')" onblur="destBlur('fem-dest','fem-dest-list')">
+      <div class="sku-ac-list" id="fem-dest-list" style="display:none;"></div>
+    </div>
     <div class="inline-row" style="margin-bottom:0;">
       <div><div class="field-label">Total Freight ₹</div><input type="number" id="fem-total" min="0" oninput="femCalcBalance()"></div>
       <div><div class="field-label">Advance Paid ₹</div><input type="number" id="fem-advance" min="0" oninput="femCalcBalance()"></div>
@@ -434,7 +437,10 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="ns-incharge" placeholder="e.g. Ramesh Singh">
     <div class="field-label">Destination / Route *</div>
-    <select id="ns-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
+    <div class="sku-ac-wrap">
+      <input class="sku-ac-input" type="text" id="ns-dest" placeholder="Type to search destination..." autocomplete="off" oninput="destSearch('ns-dest','ns-dest-list')" onfocus="destSearch('ns-dest','ns-dest-list')" onblur="destBlur('ns-dest','ns-dest-list')">
+      <div class="sku-ac-list" id="ns-dest-list" style="display:none;"></div>
+    </div>
     <div class="field-error" id="ns-dest-err" style="display:none;">Please select a destination from the list.</div>
     <div class="field-label">Truck size</div>
     <div class="truck-grid">
@@ -468,7 +474,10 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     </div>
     <div class="field-label">Loading incharge</div><input type="text" id="es-incharge">
     <div class="field-label">Destination / Route *</div>
-    <select id="es-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
+    <div class="sku-ac-wrap">
+      <input class="sku-ac-input" type="text" id="es-dest" placeholder="Type to search destination..." autocomplete="off" oninput="destSearch('es-dest','es-dest-list')" onfocus="destSearch('es-dest','es-dest-list')" onblur="destBlur('es-dest','es-dest-list')">
+      <div class="sku-ac-list" id="es-dest-list" style="display:none;"></div>
+    </div>
     <button class="btn btn-primary" onclick="saveEditSession()">Save changes</button>
     <button class="btn btn-secondary" onclick="cancelEditSession()">Cancel</button>
   </div>
@@ -672,7 +681,10 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div class="field-label">Date *</div>
       <input type="date" id="ft-date">
       <div class="field-label">Destination *</div>
-      <select id="ft-dest" style="margin-bottom:8px;"><option value="">— Select destination —</option></select>
+      <div class="sku-ac-wrap">
+        <input class="sku-ac-input" type="text" id="ft-dest" placeholder="Type to search destination..." autocomplete="off" oninput="destSearch('ft-dest','ft-dest-list')" onfocus="destSearch('ft-dest','ft-dest-list')" onblur="destBlur('ft-dest','ft-dest-list')">
+        <div class="sku-ac-list" id="ft-dest-list" style="display:none;"></div>
+      </div>
       <div class="inline-row" style="margin-bottom:0;">
         <div><div class="field-label">Total Freight &#8377;</div><input type="number" id="ft-total" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
         <div><div class="field-label">Advance Paid &#8377;</div><input type="number" id="ft-advance" min="0" placeholder="0" oninput="calcFreightBalance()"></div>
@@ -987,22 +999,54 @@ function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
 function loadDestinationsLocal(){return LS(K.DESTINATIONS)||[];}
 async function saveDestinationsSmart(d){SS(K.DESTINATIONS,d);if(fbOK&&isOnline&&window._fb){const ok=await window._fb.saveDestinations(d);if(!ok)addPQ('destinations','destinations');}else addPQ('destinations','destinations');}
 function saveDestinations(d){SS(K.DESTINATIONS,d);saveDestinationsSmart(d);}
-// Helper: populate a <select> with active destinations; adds legacy option if currentValue not in list
-function populateDestSelect(selectId,currentValue){
-  var sel=document.getElementById(selectId);if(!sel)return;
+// ─── Destination autocomplete (works on all devices/browsers) ───────────────
+function destSearch(inputId, listId){
+  var inp=document.getElementById(inputId);
+  var list=document.getElementById(listId);
+  if(!inp||!list)return;
+  var q=inp.value.trim().toLowerCase();
   var dests=loadDestinationsLocal().filter(function(d){return !d.disabled;});
-  sel.innerHTML='<option value="">— Select destination —</option>';
-  if(currentValue&&!dests.find(function(d){return d.name===currentValue;})){
-    var leg=document.createElement('option');
-    leg.value=currentValue;leg.textContent=currentValue+' ★';
-    leg.style.color='#888';sel.appendChild(leg);
+  var matches=q.length===0?dests:dests.filter(function(d){return d.name.toLowerCase().indexOf(q)>=0;});
+  if(!matches.length){
+    list.innerHTML='<div class="sku-ac-empty">No destination found</div>';
+    list.style.display='block';return;
   }
-  dests.forEach(function(d){
-    var opt=document.createElement('option');
-    opt.value=d.name;opt.textContent=d.name;
-    if(d.name===currentValue)opt.selected=true;
-    sel.appendChild(opt);
-  });
+  list.innerHTML=matches.map(function(d){
+    return '<div class="sku-ac-item" onmousedown="destPick(\''+inputId+'\',\''+listId+'\',\''+d.name.replace(/'/g,"\\'")+'\')">'
+      +d.name+'</div>';
+  }).join('');
+  list.style.display='block';
+}
+function destPick(inputId,listId,name){
+  var inp=document.getElementById(inputId);
+  var list=document.getElementById(listId);
+  if(inp)inp.value=name;
+  if(list)list.style.display='none';
+  // Clear error if shown
+  var errId=inputId.replace('-dest','-dest-err');
+  var err=document.getElementById(errId);
+  if(err)err.style.display='none';
+}
+function destBlur(inputId,listId){
+  setTimeout(function(){
+    var list=document.getElementById(listId);
+    if(list)list.style.display='none';
+    // Validate — must match an active destination exactly
+    var inp=document.getElementById(inputId);
+    if(!inp)return;
+    var val=inp.value.trim();
+    if(!val)return; // empty is caught by form validation
+    var dests=loadDestinationsLocal().filter(function(d){return !d.disabled;});
+    var exact=dests.find(function(d){return d.name.toLowerCase()===val.toLowerCase();});
+    if(exact){
+      inp.value=exact.name; // normalise casing
+    } else {
+      // Try single partial match — auto-complete it
+      var partial=dests.filter(function(d){return d.name.toLowerCase().indexOf(val.toLowerCase())>=0;});
+      if(partial.length===1){inp.value=partial[0].name;}
+      else{inp.value='';}// clear if ambiguous or no match
+    }
+  },200);
 }
 function loadSessions(){return LS(K.SESSIONS)||[];}
 function saveSessions(s){SS(K.SESSIONS,s);}
@@ -1653,7 +1697,7 @@ function startEditSess(id,fromLoading){
   document.getElementById('es-driver').value=s.driver||'';
   document.getElementById('es-driver-mobile').value=s.driverMobile||'';
   document.getElementById('es-incharge').value=s.incharge||'';
-  populateDestSelect('es-dest',s.dest||'');
+  var esDestInp=document.getElementById('es-dest');if(esDestInp)esDestInp.value=s.dest||'';
   document.getElementById('es-truck-err').style.display='none';
   goTo('screen-edit-session');
 }
@@ -3359,7 +3403,7 @@ function initNewSession(){
   ['ns-truck','ns-driver','ns-driver-mobile','ns-incharge'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
-  populateDestSelect('ns-dest',''); // fresh destination list, nothing selected
+  var nsDestInp=document.getElementById('ns-dest');if(nsDestInp)nsDestInp.value='';
   var nsDestErr=document.getElementById('ns-dest-err');if(nsDestErr)nsDestErr.style.display='none';
   var errEl=document.getElementById('ns-truck-err'); if(errEl) errEl.style.display='none';
   var d=document.getElementById('ns-date');
@@ -3429,7 +3473,7 @@ function initFreightScreen(){
   if(flDate&&!flDate.value) flDate.value=today;
   var fpDate=document.getElementById('ft-pending-date');
   if(fpDate) fpDate.value=today;
-  populateDestSelect('ft-dest',''); // populate destination dropdown
+  var ftDestInp=document.getElementById('ft-dest');if(ftDestInp)ftDestInp.value='';
   switchFreightTab(freightTab);
   // Always pull fresh freight data from Firebase when opening this screen
   if(fbOK&&isOnline&&window._fb){
@@ -3531,7 +3575,7 @@ function addFreightEntry(){
 
   // Clear form
   document.getElementById('ft-truck').value='';
-  populateDestSelect('ft-dest',''); // reset destination select
+  var ftDestInp2=document.getElementById('ft-dest');if(ftDestInp2)ftDestInp2.value='';
   document.getElementById('ft-total').value='';
   document.getElementById('ft-advance').value='';
   document.getElementById('ft-customer').value='';
@@ -3560,7 +3604,7 @@ function openFreightEditModal(id){
   var e=loadFreightEntries().find(function(x){return x.id===id;});
   if(!e)return;
   freightEditId=id;
-  populateDestSelect('fem-dest',e.destination||'');
+  var femDestInp=document.getElementById('fem-dest');if(femDestInp)femDestInp.value=e.destination||'';
   document.getElementById('fem-total').value=e.totalFreight||0;
   document.getElementById('fem-advance').value=e.advance||0;
   document.getElementById('fem-customer').value=e.customerPayable||0;
@@ -3962,7 +4006,7 @@ function selectPendingSession(idx){
   if(!s)return;
   var truck=autoFmtTruckVal(s.truck||'');
   document.getElementById('ft-truck').value=truck;
-  populateDestSelect('ft-dest',s.dest||''); // ensure legacy dest shows as option if not in master list
+  var ftDestPend=document.getElementById('ft-dest');if(ftDestPend)ftDestPend.value=s.dest||'';
   document.getElementById('ft-date').value=s.date||getISTDate();
   var errEl=document.getElementById('ft-truck-err');if(errEl)errEl.style.display='none';
   // Reset amounts
