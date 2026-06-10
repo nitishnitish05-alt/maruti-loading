@@ -786,6 +786,8 @@ try {
     async loadSessions(){try{const sn=await _db.collection("sessions").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
     async saveUsers(u){try{await _db.collection("config").doc("users").set({list:u});return true;}catch(e){return false;}},
     async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
+    async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveDestinations(d){try{await _db.collection("config").doc("destinations").set({list:d});return true;}catch(e){return false;}},
     async loadDestinations(){try{const sn=await _db.collection("config").doc("destinations").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){return false;}},
