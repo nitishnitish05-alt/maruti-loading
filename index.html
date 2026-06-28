@@ -342,6 +342,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <button class="admin-tab" onclick="adminTab('destinations',this)">📍 Destinations</button>
     <button class="admin-tab" onclick="adminTab('contractors',this)">Contractors</button>
     <button class="admin-tab" onclick="adminTab('merge',this)">🔀 Merge SKUs</button>
+    <button class="admin-tab" onclick="adminTab('backup',this)">💾 Backup</button>
   </div>
   <div id="panel-users">
     <div class="my-account-card">
@@ -417,6 +418,33 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">Finds SKU pairs that look similar (punctuation, spacing, case differences)</div>
       <button class="btn btn-secondary" onclick="findSimilarSKUs()">🔍 Find Similar SKUs</button>
       <div id="similar-skus-list" style="margin-top:12px;"></div>
+    </div>
+  </div>
+
+  <!-- BACKUP & RESTORE PANEL (admin only) -->
+  <div id="panel-backup" style="display:none;">
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">💾 Data Backup &amp; Restore</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Download a complete backup of all Loading App data (sessions, freight, production, stock, SKUs, destinations, contractors, users) as a ZIP. Save it weekly to your laptop and Google Drive.</div>
+      <div id="backup-counts" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;"></div>
+      <div id="backup-lastinfo" style="font-size:11px;color:var(--text-secondary);background:var(--bg-secondary);border-radius:var(--radius-md);padding:7px 10px;margin-bottom:10px;font-family:monospace;"></div>
+      <div id="backup-msg" style="display:none;margin-bottom:10px;"></div>
+      <button class="btn btn-success" onclick="doLoadingBackup()" id="backup-download-btn">📥 Download Backup (.zip)</button>
+      <label class="btn btn-danger" style="display:flex;align-items:center;justify-content:center;cursor:pointer;margin-bottom:0;">
+        📤 Restore from File
+        <input type="file" accept=".zip,.json" onchange="onLoadingRestoreFile(this.files[0]);this.value='';" style="display:none;">
+      </label>
+    </div>
+    <div class="card" id="backup-restore-confirm" style="display:none;border:2px solid var(--amber);">
+      <div style="font-size:13px;font-weight:700;color:var(--amber);margin-bottom:8px;">⚠️ Confirm Restore</div>
+      <div id="backup-restore-detail" style="font-size:12px;color:var(--text-secondary);line-height:1.6;margin-bottom:12px;"></div>
+      <button class="btn btn-danger" onclick="doLoadingRestore('replace')">🔄 Replace All (wipe + restore)</button>
+      <button class="btn btn-primary" onclick="doLoadingRestore('merge')">➕ Merge (add missing only)</button>
+      <button class="btn btn-secondary" onclick="cancelLoadingRestore()">Cancel</button>
+      <div style="font-size:11px;color:var(--text-secondary);line-height:1.5;margin-top:8px;">
+        <b>Replace All:</b> wipes current cloud data, then writes backup fresh.<br>
+        <b>Merge:</b> only adds records that don't already exist — current data preserved.
+      </div>
     </div>
   </div>
 </div>
@@ -769,6 +797,8 @@ function pinPress(vn, di, k) {
 <!-- Firebase via compat CDN -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- JSZip for backup/restore (read-only export, gated restore) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 try {
   const _fbApp = firebase.initializeApp({
@@ -1524,11 +1554,13 @@ function adminTab(tab,btn){
   document.getElementById('panel-destinations').style.display=tab==='destinations'?'':'none';
   document.getElementById('panel-contractors').style.display=tab==='contractors'?'':'none';
   document.getElementById('panel-merge').style.display=tab==='merge'?'':'none';
+  var pb=document.getElementById('panel-backup');if(pb)pb.style.display=tab==='backup'?'':'none';
   if(tab==='users')renderAdminUsers();
   if(tab==='skus')renderSKUs();
   if(tab==='destinations')renderDestinations();
   if(tab==='contractors')renderContractors();
   if(tab==='merge')initMergePanel();
+  if(tab==='backup')renderBackupPanel();
 }
 function renderAdminUsers(){
   document.getElementById('my-acc-name').textContent=CU?CU.username:'';
@@ -3362,6 +3394,212 @@ function deleteContractor(id){
 
 // Add Firebase prod entry methods — extend window._fb after it loads
 // ═══════════════ END STOCK SECTION ═══════════════
+
+// ═══════════════════════════════════════════════════════
+// BACKUP & RESTORE  (admin only, additive, read-only export)
+// ═══════════════════════════════════════════════════════
+var _loadingRestoreData=null;
+
+function _bkMsg(text,type){
+  var el=document.getElementById('backup-msg');if(!el)return;
+  var colors={info:['#dbeafe','#1e40af','#93c5fd'],success:['#dcfce7','#166534','#86efac'],
+    warn:['#fef3c7','#92400e','#fcd34d'],error:['#fee2e2','#991b1b','#fca5a5']};
+  var c=colors[type]||colors.info;
+  el.style.display='block';
+  el.innerHTML='<div style="background:'+c[0]+';border:1.5px solid '+c[2]+';color:'+c[1]+';padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600;">'+text+'</div>';
+}
+function _bkHideMsg(){var el=document.getElementById('backup-msg');if(el)el.style.display='none';}
+
+// Read every collection straight from Firebase (read-only)
+async function _bkReadAll(){
+  if(!fbOK||!isOnline||!window._fb)throw new Error('Must be online and connected to Firebase to back up.');
+  var db=firebase.firestore();
+  async function getDocs(col){var sn=await db.collection(col).get();return sn.docs.map(function(d){return Object.assign({__id:d.id},d.data());});}
+  async function getDoc(col,doc){var sn=await db.collection(col).doc(doc).get();return sn.exists?sn.data():null;}
+  var sessions=await getDocs('sessions');
+  var prodEntries=await getDocs('prod_entries');
+  var freightEntries=await getDocs('freight_entries');
+  var freightPayments=await getDocs('freight_payments');
+  var usersDoc=await getDoc('config','users');
+  var skusDoc=await getDoc('config','skus');
+  var destDoc=await getDoc('config','destinations');
+  var contractorsDoc=await getDoc('stock_config','contractors');
+  var openingDoc=await getDoc('stock_config','opening');
+  return {
+    meta:{version:'1.0',app:'Maruti Loading',exportedAt:new Date().toISOString(),
+      counts:{sessions:sessions.length,prodEntries:prodEntries.length,
+        freightEntries:freightEntries.length,freightPayments:freightPayments.length}},
+    sessions:sessions, prod_entries:prodEntries,
+    freight_entries:freightEntries, freight_payments:freightPayments,
+    config_users:usersDoc, config_skus:skusDoc, config_destinations:destDoc,
+    stock_contractors:contractorsDoc, stock_opening:openingDoc
+  };
+}
+
+async function renderBackupPanel(){
+  var el=document.getElementById('backup-counts');
+  var last=localStorage.getItem('tl_lastBackup')||'Never';
+  var li=document.getElementById('backup-lastinfo');
+  if(li)li.innerHTML='Last backup: <b style="color:var(--text-primary);">'+last+'</b>';
+  if(!el)return;
+  el.innerHTML='<div style="grid-column:1/-1;font-size:12px;color:var(--text-secondary);">Counting records…</div>';
+  try{
+    var data=await _bkReadAll();
+    var cards=[['Sessions',data.sessions.length],['Freight',data.freight_entries.length],
+      ['Payments',data.freight_payments.length],['Production',data.prod_entries.length],
+      ['SKUs',(data.config_skus&&data.config_skus.list?data.config_skus.list.length:0)],
+      ['Destinations',(data.config_destinations&&data.config_destinations.list?data.config_destinations.list.length:0)]];
+    el.innerHTML=cards.map(function(c){
+      return '<div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:8px;text-align:center;">'+
+        '<div style="font-size:18px;font-weight:700;color:var(--blue);">'+c[1]+'</div>'+
+        '<div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">'+c[0]+'</div></div>';
+    }).join('');
+  }catch(e){
+    el.innerHTML='<div style="grid-column:1/-1;font-size:12px;color:var(--red);">'+e.message+'</div>';
+  }
+}
+
+function _bkCSV(rows){
+  if(!rows||!rows.length)return '';
+  var cols=[];rows.forEach(function(r){Object.keys(r).forEach(function(k){if(cols.indexOf(k)<0)cols.push(k);});});
+  function esc(v){if(v==null)return '';if(typeof v==='object')v=JSON.stringify(v);v=String(v);
+    return (v.indexOf(',')>=0||v.indexOf('"')>=0||v.indexOf('\n')>=0)?'"'+v.replace(/"/g,'""')+'"':v;}
+  return cols.join(',')+'\n'+rows.map(function(r){return cols.map(function(c){return esc(r[c]);}).join(',');}).join('\n');
+}
+
+async function doLoadingBackup(){
+  var btn=document.getElementById('backup-download-btn');
+  if(btn){btn.disabled=true;btn.textContent='Reading data…';}
+  _bkMsg('Reading all data from Firebase…','info');
+  try{
+    var data=await _bkReadAll();
+    var ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,16);
+    if(typeof window.JSZip==='undefined'){
+      var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+      var url=URL.createObjectURL(blob);var a=document.createElement('a');
+      a.href=url;a.download='maruti_loading_backup_'+ts+'.json';a.click();URL.revokeObjectURL(url);
+      _bkMsg('⚠️ ZIP library unavailable — downloaded JSON only (still fully restorable).','warn');
+    }else{
+      var zip=new window.JSZip();
+      zip.file('backup.json',JSON.stringify(data,null,2));
+      zip.file('sessions.csv',_bkCSV(data.sessions));
+      zip.file('freight_entries.csv',_bkCSV(data.freight_entries));
+      zip.file('freight_payments.csv',_bkCSV(data.freight_payments));
+      zip.file('prod_entries.csv',_bkCSV(data.prod_entries));
+      zip.file('contractors.csv',_bkCSV((data.stock_contractors&&data.stock_contractors.list)||[]));
+      zip.file('skus.csv',_bkCSV((data.config_skus&&data.config_skus.list)||[]));
+      zip.file('destinations.csv',_bkCSV((data.config_destinations&&data.config_destinations.list)||[]));
+      zip.file('README.txt','Maruti Loading App Backup\nExported: '+data.meta.exportedAt+
+        '\n\nbackup.json = full restorable data (all collections)\n*.csv = human-readable spreadsheets\n\n'+
+        'To restore: Admin Panel > Backup > Restore from File, select this ZIP.');
+      var zblob=await zip.generateAsync({type:'blob'});
+      var zurl=URL.createObjectURL(zblob);var za=document.createElement('a');
+      za.href=zurl;za.download='maruti_loading_backup_'+ts+'.zip';za.click();URL.revokeObjectURL(zurl);
+      _bkMsg('✅ Backup downloaded successfully.','success');
+    }
+    var now=new Date().toLocaleString('en-IN');
+    localStorage.setItem('tl_lastBackup',now);
+    var li=document.getElementById('backup-lastinfo');
+    if(li)li.innerHTML='Last backup: <b style="color:var(--text-primary);">'+now+'</b>';
+  }catch(e){
+    _bkMsg('❌ Backup failed: '+e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='📥 Download Backup (.zip)';}
+  }
+}
+
+async function onLoadingRestoreFile(file){
+  if(!file)return;
+  _bkHideMsg();
+  _bkMsg('Reading backup file…','info');
+  try{
+    var json;
+    if(file.name.toLowerCase().endsWith('.zip')){
+      if(typeof window.JSZip==='undefined')throw new Error('ZIP library not loaded — cannot read ZIP.');
+      var zip=await window.JSZip.loadAsync(file);
+      var jf=zip.file('backup.json');
+      if(!jf)throw new Error('No backup.json found inside ZIP.');
+      json=JSON.parse(await jf.async('string'));
+    }else{
+      json=JSON.parse(await file.text());
+    }
+    if(!json.meta||!json.sessions)throw new Error('Invalid backup file — missing required fields.');
+    _loadingRestoreData=json;
+    var d=document.getElementById('backup-restore-detail');
+    if(d)d.innerHTML='Backup from: <b>'+json.meta.exportedAt+'</b><br>'+
+      'Sessions: '+json.sessions.length+' · Freight: '+(json.freight_entries||[]).length+
+      ' · Payments: '+(json.freight_payments||[]).length+' · Production: '+(json.prod_entries||[]).length;
+    document.getElementById('backup-restore-confirm').style.display='';
+    _bkMsg('Backup loaded. Choose a restore mode below.','info');
+    document.getElementById('backup-restore-confirm').scrollIntoView({behavior:'smooth',block:'center'});
+  }catch(e){
+    _bkMsg('❌ Could not read file: '+e.message,'error');
+  }
+}
+
+function cancelLoadingRestore(){
+  _loadingRestoreData=null;
+  document.getElementById('backup-restore-confirm').style.display='none';
+  _bkHideMsg();
+}
+
+async function doLoadingRestore(mode){
+  if(!_loadingRestoreData){_bkMsg('No backup loaded.','error');return;}
+  if(!fbOK||!isOnline||!window._fb){_bkMsg('Must be online to restore.','error');return;}
+  document.getElementById('backup-restore-confirm').style.display='none';
+  _bkMsg('Restoring data ('+mode+' mode)… do not close the app.','info');
+  var db=firebase.firestore();
+  var data=_loadingRestoreData;
+  var written=0,skipped=0;
+  try{
+    // Doc-array collections (sessions, prod_entries, freight_*)
+    var docCols=[
+      {name:'sessions',data:data.sessions||[]},
+      {name:'prod_entries',data:data.prod_entries||[]},
+      {name:'freight_entries',data:data.freight_entries||[]},
+      {name:'freight_payments',data:data.freight_payments||[]}
+    ];
+    if(mode==='replace'){
+      for(var i=0;i<docCols.length;i++){
+        var existing=await db.collection(docCols[i].name).get();
+        var delBatch=db.batch();
+        existing.docs.forEach(function(dd){delBatch.delete(dd.ref);});
+        await delBatch.commit();
+      }
+    }
+    for(var c=0;c<docCols.length;c++){
+      var col=docCols[c];
+      for(var k=0;k<col.data.length;k++){
+        var item=Object.assign({},col.data[k]);
+        var id=item.__id||item.id;delete item.__id;
+        if(!id)continue;
+        if(mode==='merge'){
+          var ex=await db.collection(col.name).doc(String(id)).get();
+          if(ex.exists){skipped++;continue;}
+        }
+        await db.collection(col.name).doc(String(id)).set(item);
+        written++;
+      }
+    }
+    // Singleton config docs (only restore in REPLACE mode)
+    if(mode==='replace'){
+      if(data.config_users)await db.collection('config').doc('users').set(data.config_users);
+      if(data.config_skus)await db.collection('config').doc('skus').set(data.config_skus);
+      if(data.config_destinations)await db.collection('config').doc('destinations').set(data.config_destinations);
+      if(data.stock_contractors)await db.collection('stock_config').doc('contractors').set(data.stock_contractors);
+      if(data.stock_opening)await db.collection('stock_config').doc('opening').set(data.stock_opening);
+    }
+    _bkMsg('✅ Restore complete: '+written+' written, '+skipped+' skipped. Reloading…','success');
+    _loadingRestoreData=null;
+    setTimeout(function(){location.reload();},1800);
+  }catch(e){
+    _bkMsg('❌ Restore failed: '+e.message+'  (Your existing data is unchanged unless this was Replace mode.)','error');
+  }
+}
+// ═══════════════════════════════════════════════════════
+// END BACKUP & RESTORE
+// ═══════════════════════════════════════════════════════
+
 
 // Boot
 function boot(){
