@@ -2289,6 +2289,33 @@ function calcStockForDate(date){
   return result;
 }
 
+// ═══════════════════════════════════════════════════════
+// CLOSING-STOCK SNAPSHOT PUBLISH (for Orders app production plan)
+// Publishes YESTERDAY'S closing stock (a complete, stable day) to
+// stock_config/latest_closing. Fires silently from admin/accounts
+// contexts only (their devices hold ALL sessions; supervisor devices
+// hold only their own and must never publish). Fire-and-forget:
+// any failure is logged and ignored — ledger/production unaffected.
+// ═══════════════════════════════════════════════════════
+function _yesterdayIST(){
+  var d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Kolkata'}));
+  d.setDate(d.getDate()-1);
+  var y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),da=String(d.getDate()).padStart(2,'0');
+  return y+'-'+m+'-'+da;
+}
+function publishClosingStockSnapshot(){
+  try{
+    if(!CU||!(isAdmin()||isAccounts()))return;
+    if(!fbOK||!isOnline)return;
+    var yd=_yesterdayIST();
+    var stock=calcStockForDate(yd);
+    var out={};
+    Object.keys(stock).forEach(function(id){out[id]=Number(stock[id].closing)||0;});
+    firebase.firestore().collection('stock_config').doc('latest_closing')
+      .set({date:yd,computedAt:new Date().toISOString(),publishedBy:CU.username,stock:out})
+      .catch(function(e){console.warn('snapshot publish failed:',e&&e.message);});
+  }catch(e){console.warn('snapshot publish error:',e&&e.message);}
+}
 function printStockStatement(){
   var stock=calcStockForDate(stockViewDate);
   var skus=loadSKUsLocal();
@@ -2515,6 +2542,7 @@ function toggleProdSection(){
 }
 
 function renderStockLedger(){
+  try{publishClosingStockSnapshot();}catch(e){}
   var stock=calcStockForDate(stockViewDate);
   var skus=loadSKUsLocal();
   var el=document.getElementById('stock-ledger');
@@ -2790,6 +2818,7 @@ function saveProdStockEntry(){
     addPQ('prod_entry',entry.id);
   }
 
+  try{publishClosingStockSnapshot();}catch(e){}
   editingProdId=null;
   var wasFromReport=editFromReport;
   editFromReport=false;
