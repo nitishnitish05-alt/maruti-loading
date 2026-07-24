@@ -578,6 +578,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <!-- View Stock Ledger button -->
     <div id="stock-ledger-toggle-wrap" style="margin-top:12px;">
       <button class="btn btn-secondary" style="width:100%;" onclick="toggleStockLedger()">📊 View Stock Ledger</button>
+      <button class="btn btn-secondary" style="width:100%;margin-top:8px;" onclick="goTo('screen-weight-report')">⚖️ Weight Reports</button>
     </div>
     <!-- Ledger panel — hidden by default -->
     <div id="stock-ledger-panel" style="display:none;margin-top:12px;">
@@ -634,6 +635,45 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 </div>
 
 <!-- CONTRACTOR PRODUCTION REPORT -->
+<!-- WEIGHT REPORTS -->
+<div class="screen" id="screen-weight-report">
+  <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
+  <div class="page-title">Weight Reports</div>
+  <div class="page-sub">Tonnage dispatched &amp; packed</div>
+  <div class="card no-print">
+    <div class="field-label">Report</div>
+    <select id="wr-type" onchange="renderWeightReport()">
+      <option value="dispatch">🚚 Dispatched (from truck loading)</option>
+      <option value="production">🏭 Packed (from production entries)</option>
+    </select>
+    <div class="field-label">Group by</div>
+    <select id="wr-group" onchange="renderWeightReport()">
+      <option value="sku">SKU</option>
+      <option value="category">Category (Namkeen / Snacks)</option>
+      <option value="product">Product</option>
+      <option value="dest">Destination</option>
+      <option value="truck">Truck</option>
+      <option value="contractor">Contractor</option>
+      <option value="month">Month</option>
+    </select>
+    <div class="field-label">Period</div>
+    <select id="wr-period" onchange="wrPeriodChange()">
+      <option value="week">This Week</option>
+      <option value="month" selected>This Month</option>
+      <option value="year">This Year</option>
+      <option value="custom">Custom Range</option>
+    </select>
+    <div id="wr-custom-range" style="display:none;">
+      <div class="inline-row">
+        <div style="flex:1;"><div class="field-label">From</div><input type="date" id="wr-from" style="margin-bottom:0;" onchange="renderWeightReport()"></div>
+        <div style="flex:1;"><div class="field-label">To</div><input type="date" id="wr-to" style="margin-bottom:0;" onchange="renderWeightReport()"></div>
+      </div>
+    </div>
+    <button class="btn btn-sm btn-secondary no-print" style="margin-top:10px;width:100%;" onclick="printWeightReport()">🖨️ Print</button>
+  </div>
+  <div id="wr-output"></div>
+</div>
+
 <div class="screen" id="screen-contractor-report">
   <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
   <div class="page-title">Contractor Report</div>
@@ -1239,6 +1279,7 @@ function goTo(s){
   target.classList.add('active');
   window.history.pushState({screen:s}, '', '');
   if(s==='screen-home')renderHome();
+  if(s==='screen-weight-report')renderWeightReport();
   if(s==='screen-admin'){renderAdminUsers();renderSKUs();renderDestinations();}
   if(s==='screen-login')initLogin();
   if(s==='screen-stock-home')renderStockHome();
@@ -3116,6 +3157,154 @@ function crGetDateRange(){
   }
   return {from:from,to:to};
 }
+
+// ═══════════════════════════════════════════════════════
+// WEIGHT REPORTS  (read-only; uses weightPerUnitKg from Costing mapping)
+// Dispatched = completed sessions. Packed = production entries.
+// Unmapped SKUs are NEVER silently dropped — reported separately.
+// ═══════════════════════════════════════════════════════
+var wrReportData=null;
+
+function wrPeriodChange(){
+  var v=document.getElementById('wr-period').value;
+  document.getElementById('wr-custom-range').style.display=v==='custom'?'':'none';
+  renderWeightReport();
+}
+function wrGetDateRange(){
+  var p=document.getElementById('wr-period').value;
+  var today=getISTDate();
+  var d=new Date(today+'T00:00:00');
+  var from=today,to=today;
+  if(p==='week'){var day=d.getDay();var diff=day===0?6:day-1;var s=new Date(d);s.setDate(d.getDate()-diff);from=s.toISOString().split('T')[0];}
+  else if(p==='month'){from=today.slice(0,7)+'-01';}
+  else if(p==='year'){from=today.slice(0,4)+'-01-01';}
+  else if(p==='custom'){
+    var f=document.getElementById('wr-from').value,t=document.getElementById('wr-to').value;
+    from=f||today;to=t||today;
+  }
+  return {from:from,to:to};
+}
+function _wrKg(n){
+  if(!n)return '0';
+  if(n>=1000)return (n/1000).toFixed(2)+' t';
+  return (Math.round(n*100)/100).toLocaleString('en-IN')+' kg';
+}
+function _wrSkuMap(){
+  var m={};loadSKUsLocal().forEach(function(s){m[s.id]=s;});return m;
+}
+function renderWeightReport(){
+  var el=document.getElementById('wr-output');if(!el)return;
+  var type=document.getElementById('wr-type').value;
+  var group=document.getElementById('wr-group').value;
+  var range=wrGetDateRange();
+  var skuMap=_wrSkuMap();
+  var rows={};            // key -> {label, kg, units, unmappedUnits}
+  var totKg=0,totUnits=0,unmappedUnits=0,unmappedSkus={};
+  var srcCount=0;
+
+  function add(key,label,skuId,qty,extra){
+    var sk=skuMap[skuId];
+    var wpu=sk?Number(sk.weightPerUnitKg)||0:0;
+    var kg=wpu*qty;
+    if(!rows[key])rows[key]={label:label,kg:0,units:0,unmapped:0,sub:{}};
+    rows[key].units+=qty;totUnits+=qty;
+    if(wpu>0){rows[key].kg+=kg;totKg+=kg;}
+    else{rows[key].unmapped+=qty;unmappedUnits+=qty;if(sk)unmappedSkus[sk.name]=(unmappedSkus[sk.name]||0)+qty;}
+  }
+
+  if(type==='dispatch'){
+    var sessions=loadSessions().filter(function(s){return s.done&&s.date>=range.from&&s.date<=range.to;});
+    srcCount=sessions.length;
+    sessions.forEach(function(s){
+      (s.rowData||[]).forEach(function(r){
+        (r.entries||[]).forEach(function(e){
+          if(!e.skuId||!e.qty)return;
+          var qty=parseFloat(e.qty)||0;if(!qty)return;
+          var sk=skuMap[e.skuId];
+          var key,label;
+          if(group==='sku'){key='s'+e.skuId;label=sk?sk.name:'SKU #'+e.skuId;}
+          else if(group==='category'){var c=(sk&&sk.category)?sk.category:'';key='c'+(c||'zz');label=c?(c.charAt(0).toUpperCase()+c.slice(1)):'⚠️ Not categorised';}
+          else if(group==='product'){var p=(sk&&sk.productName)?sk.productName:'';key='p'+(p||'zz');label=p||'⚠️ Not mapped';}
+          else if(group==='dest'){key='d'+(s.dest||'-');label=s.dest||'(no destination)';}
+          else if(group==='truck'){key='t'+(s.truck||'-');label=s.truck||'(no truck)';}
+          else if(group==='month'){key='m'+s.date.slice(0,7);label=s.date.slice(0,7);}
+          else {key='x';label='All';}
+          add(key,label,e.skuId,qty);
+        });
+      });
+    });
+  }else{
+    var entries=loadProdEntries().filter(function(e){return e.date>=range.from&&e.date<=range.to;});
+    srcCount=entries.length;
+    var contractors=loadContractors();
+    entries.forEach(function(en){
+      (en.items||[]).forEach(function(it){
+        if(!it.skuId||!it.qty)return;
+        var qty=parseFloat(it.qty)||0;if(!qty)return;
+        var sk=skuMap[it.skuId];
+        var key,label;
+        if(group==='sku'){key='s'+it.skuId;label=sk?sk.name:'SKU #'+it.skuId;}
+        else if(group==='category'){var c=(sk&&sk.category)?sk.category:'';key='c'+(c||'zz');label=c?(c.charAt(0).toUpperCase()+c.slice(1)):'⚠️ Not categorised';}
+        else if(group==='product'){var p=(sk&&sk.productName)?sk.productName:'';key='p'+(p||'zz');label=p||'⚠️ Not mapped';}
+        else if(group==='contractor'){
+          var cn=en.contractor||'';
+          if(!cn&&en.contractorId){var cc=contractors.find(function(c){return c.id===en.contractorId;});cn=cc?cc.name:'';}
+          key='k'+(cn||'-');label=cn||'(no contractor)';
+        }
+        else if(group==='month'){key='m'+en.date.slice(0,7);label=en.date.slice(0,7);}
+        else {key='x';label='All';}
+        add(key,label,it.skuId,qty);
+      });
+    });
+  }
+
+  var list=Object.keys(rows).map(function(k){return rows[k];});
+  if(!list.length){
+    el.innerHTML='<div class="card"><div class="empty-state">No '+(type==='dispatch'?'dispatches':'production entries')+' found for this period.</div></div>';
+    wrReportData=null;return;
+  }
+  list.sort(function(a,b){return b.kg-a.kg;});
+
+  var mappedPct=totUnits?Math.round(((totUnits-unmappedUnits)/totUnits)*100):0;
+  var srcLabel=type==='dispatch'?(srcCount+' truck session(s)'):(srcCount+' production entr'+(srcCount===1?'y':'ies'));
+
+  var h='<div class="card">';
+  h+='<div style="font-size:13px;font-weight:700;margin-bottom:2px;">'+(type==='dispatch'?'🚚 Dispatched':'🏭 Packed')+' · '+range.from+' → '+range.to+'</div>';
+  h+='<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">'+srcLabel+'</div>';
+  h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:4px;">';
+  h+='<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;color:var(--blue);">'+_wrKg(totKg)+'</div><div style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--text-secondary);">Total Weight</div></div>';
+  h+='<div style="background:var(--bg-secondary);border-radius:8px;padding:10px;text-align:center;"><div style="font-size:20px;font-weight:800;">'+totUnits.toLocaleString('en-IN')+'</div><div style="font-size:10px;text-transform:uppercase;font-weight:700;color:var(--text-secondary);">Total Units</div></div>';
+  h+='</div>';
+  if(unmappedUnits>0){
+    h+='<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:600;">⚠️ '+unmappedUnits.toLocaleString('en-IN')+' unit(s) have no weight data (SKU not yet mapped in Costing App). Weight coverage: '+mappedPct+'% of units.</div>';
+  }
+  h+='</div>';
+
+  h+='<div class="card"><table style="width:100%;border-collapse:collapse;font-size:12px;">';
+  h+='<tr style="border-bottom:2px solid var(--border);"><th style="text-align:left;padding:6px 4px;font-size:10px;text-transform:uppercase;color:var(--text-secondary);">'+group.toUpperCase()+'</th><th style="text-align:right;padding:6px 4px;font-size:10px;text-transform:uppercase;color:var(--text-secondary);">Units</th><th style="text-align:right;padding:6px 4px;font-size:10px;text-transform:uppercase;color:var(--text-secondary);">Weight</th><th style="text-align:right;padding:6px 4px;font-size:10px;text-transform:uppercase;color:var(--text-secondary);">%</th></tr>';
+  list.forEach(function(r){
+    var pct=totKg?Math.round((r.kg/totKg)*100):0;
+    h+='<tr style="border-bottom:1px solid var(--border);">';
+    h+='<td style="padding:7px 4px;font-weight:600;">'+r.label+(r.unmapped?' <span style="color:#d97706;font-size:10px;">('+r.unmapped+' unweighed)</span>':'')+'</td>';
+    h+='<td style="padding:7px 4px;text-align:right;">'+r.units.toLocaleString('en-IN')+'</td>';
+    h+='<td style="padding:7px 4px;text-align:right;font-weight:700;">'+_wrKg(r.kg)+'</td>';
+    h+='<td style="padding:7px 4px;text-align:right;color:var(--text-secondary);">'+pct+'%</td>';
+    h+='</tr>';
+  });
+  h+='<tr style="border-top:2px solid var(--border);font-weight:800;"><td style="padding:8px 4px;">TOTAL</td><td style="padding:8px 4px;text-align:right;">'+totUnits.toLocaleString('en-IN')+'</td><td style="padding:8px 4px;text-align:right;">'+_wrKg(totKg)+'</td><td style="padding:8px 4px;text-align:right;">100%</td></tr>';
+  h+='</table></div>';
+
+  if(Object.keys(unmappedSkus).length){
+    h+='<div class="card no-print"><div style="font-size:12px;font-weight:700;margin-bottom:6px;color:#92400e;">⚠️ SKUs needing mapping</div>';
+    Object.keys(unmappedSkus).sort(function(a,b){return unmappedSkus[b]-unmappedSkus[a];}).slice(0,15).forEach(function(n){
+      h+='<div style="font-size:11px;padding:3px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;"><span>'+n+'</span><span style="color:var(--text-secondary);">'+unmappedSkus[n]+' units</span></div>';
+    });
+    h+='</div>';
+  }
+  el.innerHTML=h;
+  wrReportData={type:type,group:group,range:range,rows:list,totKg:totKg,totUnits:totUnits};
+}
+function printWeightReport(){window.print();}
 
 function renderContractorReport(){
   var contractorId=document.getElementById('cr-contractor').value;
