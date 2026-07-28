@@ -2021,11 +2021,42 @@ function saveEditRow(ri){
   if(!v.length){alert(`Row ${ri+1} must have at least one SKU.`);return;}
   liveRows[ri].entries=v;persistLive();editRowSnap=null;editRowIdx=-1;renderLoading(curSessId);
 }
+// ═══════════════════════════════════════════════════════
+// WEIGHT SNAPSHOT AT DISPATCH
+// Freezes each entry's kg-per-unit at the moment the session is
+// finalised, so historical tonnage NEVER changes if a fill weight
+// is later edited in the Costing App.
+// Idempotent: only stamps entries that have no wKg yet. If a row is
+// re-edited after re-opening a session, flushDOM clears that row's
+// stamps and re-finalising re-stamps them at the then-current weight
+// — which is the correct behaviour.
+// Fully guarded: any failure leaves the session exactly as before.
+// ═══════════════════════════════════════════════════════
+function _stampEntryWeights(sess){
+  try{
+    if(!sess||!sess.rowData)return 0;
+    var skus=loadSKUsLocal();
+    var m={};skus.forEach(function(k){m[k.id]=k;});
+    var n=0;
+    sess.rowData.forEach(function(row){
+      if(!row||!row.entries)return;
+      row.entries.forEach(function(e){
+        if(!e||!e.skuId||!e.qty)return;
+        if(e.wKg!==undefined&&e.wKg!==null)return; // already frozen
+        var sk=m[e.skuId];
+        var w=sk?Number(sk.weightPerUnitKg)||0:0;
+        if(w>0){e.wKg=w;n++;}
+      });
+    });
+    return n;
+  }catch(err){console.warn('weight stamp skipped:',err&&err.message);return 0;}
+}
 async function finaliseSession(){
   // Make sure latest row data is saved first
   try{ persistLive(); }catch(e){}
   const s=getSess(curSessId);
   if(!s){alert('Session not found. Please go back and try again.');return;}
+  try{ _stampEntryWeights(s); }catch(e){}
   s.done=true;s.endTime=new Date().toISOString();s.synced=false;
   saveSess(s);stopTimer();stopAutoSave();editRowIdx=-1;
   setSyncBar('syncing','Uploading completed session to cloud...');
@@ -2839,7 +2870,7 @@ function saveProdStockEntry(){
     contractor:cName,
     contractorId:cId,
     shift:shift,
-    items:items.map(function(s){return{skuId:parseInt(s.skuId)||s.skuId,qty:parseFloat(s.qty)};}),
+    items:items.map(function(s){var _id=parseInt(s.skuId)||s.skuId;var _sk=loadSKUsLocal().find(function(k){return k.id==_id;});var _w=_sk?Number(_sk.weightPerUnitKg)||0:0;var _o={skuId:_id,qty:parseFloat(s.qty)};if(_w>0)_o.wKg=_w;return _o;}),
     createdBy:origEntry?origEntry.createdBy:CU.username,
     createdAt:origEntry?origEntry.createdAt:new Date().toISOString(),
     updatedAt:new Date().toISOString()
@@ -3200,15 +3231,22 @@ function renderWeightReport(){
   var skuMap=_wrSkuMap();
   var rows={};            // key -> {label, kg, units, unmappedUnits}
   var totKg=0,totUnits=0,unmappedUnits=0,unmappedSkus={};
+  var frozenUnits=0,liveUnits=0;
   var srcCount=0;
 
-  function add(key,label,skuId,qty,extra){
+  function add(key,label,skuId,qty,snapKg){
     var sk=skuMap[skuId];
-    var wpu=sk?Number(sk.weightPerUnitKg)||0:0;
+    var frozen=Number(snapKg)||0;
+    // Frozen weight (recorded at dispatch/packing) always wins over the
+    // current SKU master weight — historical tonnage must never shift.
+    var wpu=frozen>0?frozen:(sk?Number(sk.weightPerUnitKg)||0:0);
     var kg=wpu*qty;
     if(!rows[key])rows[key]={label:label,kg:0,units:0,unmapped:0,sub:{}};
     rows[key].units+=qty;totUnits+=qty;
-    if(wpu>0){rows[key].kg+=kg;totKg+=kg;}
+    if(wpu>0){
+      rows[key].kg+=kg;totKg+=kg;
+      if(frozen>0)frozenUnits+=qty;else liveUnits+=qty;
+    }
     else{rows[key].unmapped+=qty;unmappedUnits+=qty;if(sk)unmappedSkus[sk.name]=(unmappedSkus[sk.name]||0)+qty;}
   }
 
@@ -3229,7 +3267,7 @@ function renderWeightReport(){
           else if(group==='truck'){key='t'+(s.truck||'-');label=s.truck||'(no truck)';}
           else if(group==='month'){key='m'+s.date.slice(0,7);label=s.date.slice(0,7);}
           else {key='x';label='All';}
-          add(key,label,e.skuId,qty);
+          add(key,label,e.skuId,qty,Number(e.wKg)||0);
         });
       });
     });
@@ -3253,7 +3291,7 @@ function renderWeightReport(){
         }
         else if(group==='month'){key='m'+en.date.slice(0,7);label=en.date.slice(0,7);}
         else {key='x';label='All';}
-        add(key,label,it.skuId,qty);
+        add(key,label,it.skuId,qty,Number(it.wKg)||0);
       });
     });
   }
@@ -3277,6 +3315,11 @@ function renderWeightReport(){
   h+='</div>';
   if(unmappedUnits>0){
     h+='<div style="margin-top:8px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:8px;padding:8px 10px;font-size:11px;font-weight:600;">⚠️ '+unmappedUnits.toLocaleString('en-IN')+' unit(s) have no weight data (SKU not yet mapped in Costing App). Weight coverage: '+mappedPct+'% of units.</div>';
+  }
+  if(liveUnits>0&&frozenUnits>0){
+    h+='<div style="margin-top:6px;font-size:10px;color:var(--text-secondary);">🔒 '+frozenUnits.toLocaleString('en-IN')+' unit(s) use weight frozen at dispatch · '+liveUnits.toLocaleString('en-IN')+' older unit(s) use the current SKU weight.</div>';
+  }else if(frozenUnits>0){
+    h+='<div style="margin-top:6px;font-size:10px;color:var(--text-secondary);">🔒 All weights frozen at dispatch time.</div>';
   }
   h+='</div>';
 
