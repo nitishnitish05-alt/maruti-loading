@@ -180,7 +180,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 .modal-overlay.open { display: flex; }
 .modal-box { background: var(--bg-primary); border-radius: var(--radius-lg); padding: 20px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
 .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-.modal-msg { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; }
+.modal-msg { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5; white-space: pre-line; }
 
 /* My account highlight */
 .my-account-card { background: var(--bg-primary); border: 2px solid var(--blue); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 12px; }
@@ -230,6 +230,25 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <div id="eu-msg" style="font-size:13px;text-align:center;margin-bottom:10px;min-height:18px;color:var(--text-secondary);"></div>
     <button class="btn btn-primary" onclick="saveEditUser()">Save changes</button>
     <button class="btn btn-secondary" onclick="closeEditUserModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- LABOUR RATE MODAL -->
+<div class="modal-overlay" id="rate-modal">
+  <div class="modal-box">
+    <div class="modal-title" id="rate-modal-title">Add / Change Rate</div>
+    <div class="modal-msg" id="rate-modal-msg" style="margin-bottom:12px;"></div>
+    <div class="field-label">Applies to</div>
+    <select id="rm-sku"></select>
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">Rate ₹ per unit</div><input type="number" id="rm-rate" min="0" step="0.01" placeholder="0.00"></div>
+      <div><div class="field-label">Effective from</div><input type="date" id="rm-from"></div>
+    </div>
+    <div class="field-label">Note (optional)</div>
+    <input type="text" id="rm-note" placeholder="e.g. revised after Diwali">
+    <div id="rm-msg" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;min-height:16px;"></div>
+    <button class="btn btn-primary" onclick="saveLabourRate()">Save rate</button>
+    <button class="btn btn-secondary" onclick="closeRateModal()">Cancel</button>
   </div>
 </div>
 
@@ -399,6 +418,17 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <button class="btn btn-primary" onclick="addContractor()">+ Add Contractor</button>
     </div>
     <div class="card"><div id="contractors-list"></div></div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px;">💰 Production Rates</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">
+        Set one default rate per contractor, and add SKU-specific rates only where they differ.
+        Rates carry an effective-from date, so old settlements always recalculate at the rate that was actually paid.
+      </div>
+      <div class="field-label">Contractor</div>
+      <select id="lr-contractor" onchange="renderLabourRates()"></select>
+      <div id="lr-list"></div>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="openAddRate()">+ Add / Change Rate</button>
+    </div>
   </div>
 
   <!-- SKU MERGE PANEL -->
@@ -861,6 +891,10 @@ try {
     async saveDestinations(d){try{await _db.collection("config").doc("destinations").set({list:d});return true;}catch(e){return false;}},
     async loadDestinations(){try{const sn=await _db.collection("config").doc("destinations").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){return false;}},
+    async saveLabourRates(r){try{await _db.collection("stock_config").doc("labour_rates").set({list:r});return true;}catch(e){return false;}},
+    async loadLabourRates(){try{const sn=await _db.collection("stock_config").doc("labour_rates").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveContractorPayments(p){try{await _db.collection("stock_config").doc("contractor_payments").set({list:p});return true;}catch(e){return false;}},
+    async loadContractorPayments(){try{const sn=await _db.collection("stock_config").doc("contractor_payments").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async loadContractors(){try{const sn=await _db.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveProdEntry(e){try{await _db.collection("prod_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
     async deleteProdEntry(id){try{await _db.collection("prod_entries").doc(id).delete();return true;}catch(e){return false;}},
@@ -928,6 +962,8 @@ async function syncQueue(){
       else if(item.type==='skus'){const ok=await window._fb.saveSKUs(loadSKUsLocal());if(ok)delPQ('skus','skus');else fail++;}
       else if(item.type==='destinations'){const ok=await window._fb.saveDestinations(loadDestinationsLocal());if(ok)delPQ('destinations','destinations');else fail++;}
       else if(item.type==='contractors'&&window._fb.saveContractors){const ok=await window._fb.saveContractors(loadContractors());if(ok)delPQ('contractors','contractors');else fail++;}
+      else if(item.type==='labour_rates'&&window._fb.saveLabourRates){const ok=await window._fb.saveLabourRates(loadLabourRates());if(ok)delPQ('labour_rates','labour_rates');else fail++;}
+      else if(item.type==='contractor_payments'&&window._fb.saveContractorPayments){const ok=await window._fb.saveContractorPayments(loadContractorPayments());if(ok)delPQ('contractor_payments','contractor_payments');else fail++;}
       else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
       else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
       else if(item.type==='freight_entry'&&window._fb.saveFreightEntry){const fe=loadFreightEntries().find(x=>x.id===item.id);if(fe){const ok=await window._fb.saveFreightEntry(fe);if(ok)delPQ('freight_entry',item.id);else fail++;}else delPQ('freight_entry',item.id);}
@@ -967,6 +1003,12 @@ async function pullCloud(){
     // Pull stock data — contractors, prod entries, opening stock
     if(window._fb.loadContractors){
       const cc=await window._fb.loadContractors();if(cc)SS(SK.CONTRACTORS,cc);
+    }
+    if(window._fb.loadLabourRates){
+      const clr=await window._fb.loadLabourRates();if(clr)SS(SK.LABOUR_RATES,clr);
+    }
+    if(window._fb.loadContractorPayments){
+      const ccp=await window._fb.loadContractorPayments();if(ccp)SS(SK.CONTRACTOR_PAYMENTS,ccp);
     }
     if(window._fb.loadProdEntries){
       const cp=await window._fb.loadProdEntries();
@@ -1599,7 +1641,7 @@ function adminTab(tab,btn){
   if(tab==='users')renderAdminUsers();
   if(tab==='skus')renderSKUs();
   if(tab==='destinations')renderDestinations();
-  if(tab==='contractors')renderContractors();
+  if(tab==='contractors'){renderContractors();renderLabourRates();}
   if(tab==='merge')initMergePanel();
   if(tab==='backup')renderBackupPanel();
 }
@@ -2258,7 +2300,9 @@ function doExport(id){
 const SK={
   PROD_ENTRIES:'ms_prod_entries',
   OPENING:'ms_opening',
-  CONTRACTORS:'ms_contractors'
+  CONTRACTORS:'ms_contractors',
+  LABOUR_RATES:'ms_labour_rates',
+  CONTRACTOR_PAYMENTS:'ms_contractor_payments'
 };
 
 var stockViewDate=new Date().toISOString().split('T')[0];
@@ -2278,6 +2322,36 @@ function saveOpeningStockData(o){
   if(fbOK&&isOnline&&window._fb&&window._fb.saveOpeningStock)window._fb.saveOpeningStock(o);
   else addPQ('opening','opening');
 }
+function loadLabourRates(){return LS(SK.LABOUR_RATES)||[];}
+function saveLabourRates(r){
+  SS(SK.LABOUR_RATES,r);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveLabourRates)window._fb.saveLabourRates(r);
+  else addPQ('labour_rates','labour_rates');
+}
+function loadContractorPayments(){return LS(SK.CONTRACTOR_PAYMENTS)||[];}
+function saveContractorPayments(p){
+  SS(SK.CONTRACTOR_PAYMENTS,p);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveContractorPayments)window._fb.saveContractorPayments(p);
+  else addPQ('contractor_payments','contractor_payments');
+}
+
+// Rate in force for a contractor + SKU on a given date.
+// Resolution order: exact contractor+SKU match, then the contractor's default row
+// (skuId null). Returns null when neither exists, so an unpriced line can be flagged
+// rather than silently costed at zero.
+function resolveLabourRate(contractorId, skuId, onDate){
+  var rows=loadLabourRates().filter(function(r){
+    return r.contractorId===contractorId && (r.effectiveFrom||'') <= (onDate||'9999-12-31');
+  });
+  var pick=function(match){
+    var c=rows.filter(match).sort(function(a,b){return (b.effectiveFrom||'').localeCompare(a.effectiveFrom||'');});
+    return c.length?c[0]:null;
+  };
+  return pick(function(r){return String(r.skuId)===String(skuId);})
+      || pick(function(r){return r.skuId===null||r.skuId===undefined||r.skuId==='';})
+      || null;
+}
+
 function loadContractors(){return LS(SK.CONTRACTORS)||[];}
 function saveContractors(c){
   SS(SK.CONTRACTORS,c);
@@ -3493,26 +3567,62 @@ function deleteProdEntryFromReport(id){
 function buildRateInputs(skuRows){
   var el=document.getElementById('cr-rate-inputs');
   if(!el)return;
-  el.innerHTML=skuRows.map(function(t){
-    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'+
-      '<div style="flex:1;font-size:13px;font-weight:600;">'+t.name+'<div style="font-size:11px;color:var(--text-secondary);">'+t.qty+' '+t.unit+'</div></div>'+
-      '<div style="font-size:12px;color:var(--text-secondary);">₹/'+t.unit+'</div>'+
-      '<input type="number" min="0" id="rate-'+t.skuId+'" placeholder="0.00" style="width:80px;margin-bottom:0;font-size:13px;padding:7px 8px;">'+
+  // Rates come from the stored table, resolved against each production entry's own date,
+  // so a mid-period rate change is handled correctly instead of one rate for the whole span.
+  var priced=crPricedLines();
+  el.innerHTML=priced.map(function(l){
+    var rateTxt = l.rates.length===0 ? '<span style="color:var(--red);font-weight:700;">no rate set</span>'
+      : l.rates.length===1 ? '₹'+l.rates[0]
+      : '₹'+Math.min.apply(null,l.rates)+'–'+Math.max.apply(null,l.rates)+' <span style="font-size:10px;">(changed mid-period)</span>';
+    return '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding-bottom:8px;border-bottom:0.5px solid var(--border);">'+
+      '<div style="flex:1;font-size:13px;font-weight:600;">'+l.name+
+        '<div style="font-size:11px;color:var(--text-secondary);">'+l.qty+' '+l.unit+' · '+rateTxt+'</div></div>'+
+      '<div style="font-size:14px;font-weight:700;'+(l.rates.length?'':'color:var(--red);')+'">'+
+        (l.rates.length?'₹'+l.amount.toFixed(2):'—')+'</div>'+
     '</div>';
-  }).join('');
+  }).join('')+
+  (priced.some(function(l){return !l.rates.length;})
+    ? '<div style="background:var(--red-light);border-radius:var(--radius-md);padding:9px 12px;font-size:12px;color:var(--red);margin-top:4px;">⚠ Some SKUs have no rate for this contractor. Set a default rate under Admin → Contractors, or these lines will be left out of the total.</div>'
+    : '');
   document.getElementById('cr-report-output').querySelector&&
     document.getElementById('cr-report-output').insertAdjacentHTML&&null;
+}
+
+// Price every production line at the rate in force on that entry's own date.
+// Returns one row per SKU with the total amount and which rate(s) were applied.
+function crPricedLines(){
+  if(!crReportData)return [];
+  var skus=loadSKUsLocal();
+  var cid=document.getElementById('cr-contractor').value;
+  var agg={};
+  crReportData.entries.forEach(function(e){
+    var entCid=e.contractorId||cid;
+    (e.items||[]).forEach(function(item){
+      var sk=skus.find(function(s){return String(s.id)===String(item.skuId);});
+      if(!sk)return;
+      var qty=parseFloat(item.qty)||0;
+      if(!agg[sk.id])agg[sk.id]={skuId:sk.id,name:sk.name,unit:sk.unit,qty:0,amount:0,rates:[],unpriced:0};
+      var a=agg[sk.id];
+      a.qty+=qty;
+      var r=entCid?resolveLabourRate(entCid,sk.id,e.date):null;
+      if(r){
+        a.amount+=qty*r.rate;
+        if(a.rates.indexOf(r.rate)<0)a.rates.push(r.rate);
+      }else{
+        a.unpriced+=qty;
+      }
+    });
+  });
+  return Object.values(agg).sort(function(a,b){return a.name.localeCompare(b.name);});
 }
 
 function calcPayment(){
   if(!crReportData)return;
   var total=0;
-  var lines=crReportData.skuRows.map(function(t){
-    var rateEl=document.getElementById('rate-'+t.skuId);
-    var rate=rateEl?parseFloat(rateEl.value)||0:0;
-    var amount=t.qty*rate;
-    total+=amount;
-    return {name:t.name,unit:t.unit,qty:t.qty,rate:rate,amount:amount};
+  var lines=crPricedLines().map(function(t){
+    total+=t.amount;
+    var rate=t.qty>0?(t.amount/t.qty):0;   // effective rate across the period
+    return {name:t.name,unit:t.unit,qty:t.qty,rate:Math.round(rate*100)/100,amount:t.amount,rates:t.rates,unpriced:t.unpriced};
   });
 
   // Append payment summary to report output
@@ -3534,6 +3644,21 @@ function calcPayment(){
     '</div>'+
   '</div>';
   // Remove old payment card if exists
+  // Settlement box — record what was actually paid, so the gap against the
+  // computed figure is visible. A widening gap means tally disputes or extras.
+  var cidNow=document.getElementById('cr-contractor').value;
+  payHTML+='<div class="card" id="settle-card">'+
+    '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">🧾 Record Settlement</div>'+
+    (cidNow?'':'<div style="font-size:12px;color:var(--amber);margin-bottom:8px;">Select a single contractor to record a settlement.</div>')+
+    '<div class="inline-row" style="margin-bottom:0;">'+
+      '<div><div class="field-label">Computed ₹</div><input type="number" id="st-computed" value="'+total.toFixed(2)+'" readonly style="background:var(--bg-secondary);color:var(--text-secondary);"></div>'+
+      '<div><div class="field-label">Actually paid ₹</div><input type="number" id="st-actual" min="0" step="0.01" placeholder="0.00" oninput="stGap()"></div>'+
+    '</div>'+
+    '<div id="st-gap" style="font-size:12px;font-weight:600;margin-bottom:8px;min-height:16px;"></div>'+
+    '<div class="field-label">Notes</div><input type="text" id="st-notes" placeholder="e.g. ₹2,000 advance adjusted">'+
+    '<button class="btn btn-success"'+(cidNow?'':' disabled')+' onclick="saveSettlement()">Save settlement</button>'+
+  '</div>';
+
   var old=document.getElementById('payment-summary-card');
   if(old)old.remove();
   var wrap=document.createElement('div');
@@ -3542,6 +3667,87 @@ function calcPayment(){
   document.getElementById('cr-report-output').appendChild(wrap);
   crReportData.paymentLines=lines;
   crReportData.paymentTotal=total;
+  renderSettlementHistory();
+}
+
+function stGap(){
+  var el=document.getElementById('st-gap');
+  if(!el||!crReportData)return;
+  var actual=parseFloat(document.getElementById('st-actual').value);
+  if(isNaN(actual)){el.textContent='';return;}
+  var diff=actual-(crReportData.paymentTotal||0);
+  if(Math.abs(diff)<0.005){el.style.color='var(--green)';el.textContent='✓ Matches the computed amount exactly.';return;}
+  el.style.color=diff>0?'var(--red)':'var(--amber)';
+  el.textContent=(diff>0?'Paid ₹'+diff.toFixed(2)+' MORE than computed':'Paid ₹'+Math.abs(diff).toFixed(2)+' LESS than computed')+
+    ' — worth noting why.';
+}
+
+function saveSettlement(){
+  if(!crReportData)return;
+  var cid=document.getElementById('cr-contractor').value;
+  if(!cid){alert('Select a single contractor before recording a settlement.');return;}
+  var actual=parseFloat(document.getElementById('st-actual').value);
+  if(isNaN(actual)||actual<0){alert('Enter the amount actually paid.');return;}
+  var notes=document.getElementById('st-notes').value.trim();
+  var contractor=loadContractors().find(function(x){return x.id===cid;});
+  var computed=crReportData.paymentTotal||0;
+  showModal('Record Settlement',
+    'Save this settlement?\n\n'+(contractor?contractor.name:'')+'\n'+crReportData.range.from+' → '+crReportData.range.to+
+    '\n\nComputed ₹'+computed.toFixed(2)+' · Paid ₹'+actual.toFixed(2),
+    function(){
+      var list=loadContractorPayments();
+      list.push({
+        id:'CP'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
+        contractorId:cid,
+        contractorName:contractor?contractor.name:'',
+        from:crReportData.range.from, to:crReportData.range.to,
+        computedAmount:Math.round(computed*100)/100,
+        actualAmount:Math.round(actual*100)/100,
+        lines:(crReportData.paymentLines||[]).map(function(l){
+          return {name:l.name,unit:l.unit,qty:l.qty,rate:l.rate,amount:Math.round(l.amount*100)/100};
+        }),
+        notes:notes,
+        createdBy:CU.username, createdAt:new Date().toISOString()
+      });
+      saveContractorPayments(list);
+      closeModal();
+      document.getElementById('st-actual').value='';
+      document.getElementById('st-notes').value='';
+      var g=document.getElementById('st-gap'); if(g)g.textContent='';
+      renderSettlementHistory();
+    });
+}
+
+function renderSettlementHistory(){
+  var out=document.getElementById('cr-report-output');
+  if(!out)return;
+  var old=document.getElementById('settle-history-card');
+  if(old)old.remove();
+  var cid=document.getElementById('cr-contractor').value;
+  var list=loadContractorPayments()
+    .filter(function(p){return !cid||p.contractorId===cid;})
+    .sort(function(a,b){return (b.to||'').localeCompare(a.to||'');})
+    .slice(0,12);
+  if(!list.length)return;
+  var html='<div class="card" id="settle-history-card">'+
+    '<div style="font-size:13px;font-weight:700;margin-bottom:10px;">📚 Past Settlements</div>'+
+    list.map(function(p){
+      var diff=(p.actualAmount||0)-(p.computedAmount||0);
+      var col=Math.abs(diff)<0.005?'var(--green)':(diff>0?'var(--red)':'var(--amber)');
+      return '<div style="padding:8px 0;border-bottom:0.5px solid var(--border);">'+
+        '<div style="display:flex;justify-content:space-between;gap:8px;font-size:13px;">'+
+          '<div style="font-weight:600;">'+(p.contractorName||'—')+'</div>'+
+          '<div style="font-weight:700;">₹'+(p.actualAmount||0).toFixed(2)+'</div>'+
+        '</div>'+
+        '<div style="font-size:11px;color:var(--text-secondary);">'+p.from+' → '+p.to+
+          ' · computed ₹'+(p.computedAmount||0).toFixed(2)+
+          ' · <span style="color:'+col+';font-weight:600;">'+
+            (Math.abs(diff)<0.005?'exact':(diff>0?'+₹'+diff.toFixed(2):'−₹'+Math.abs(diff).toFixed(2)))+'</span>'+
+          (p.notes?' · '+p.notes:'')+'</div>'+
+      '</div>';
+    }).join('')+
+  '</div>';
+  out.insertAdjacentHTML('beforeend', html);
 }
 
 function printContractorReport(){
@@ -3634,6 +3840,141 @@ function renderContractors(){
       '</div><button class="icon-btn del" onclick="deleteContractor(\''+c.id+'\')">🗑️</button></div>';
   }).join(''):'<div style="font-size:13px;color:var(--text-secondary);">No contractors added yet.</div>';
 }
+// ── Production rate management ──────────────────────────────────
+// Two distinct actions: "Add / Change" writes a NEW dated row so history survives,
+// while "Correct" edits a row in place and exists only for genuine typos.
+var editingRateId=null;
+
+function fillRateContractorSelect(){
+  var sel=document.getElementById('lr-contractor');
+  if(!sel)return;
+  var cur=sel.value;
+  var list=loadContractors();
+  sel.innerHTML=list.length
+    ? list.map(function(c){return '<option value="'+c.id+'">'+c.name+'</option>';}).join('')
+    : '<option value="">No contractors yet</option>';
+  if(cur&&list.some(function(c){return c.id===cur;}))sel.value=cur;
+}
+
+function renderLabourRates(){
+  fillRateContractorSelect();
+  var el=document.getElementById('lr-list');
+  if(!el)return;
+  var cid=document.getElementById('lr-contractor').value;
+  if(!cid){el.innerHTML='<div style="font-size:13px;color:var(--text-secondary);padding:8px 0;">Add a contractor first.</div>';return;}
+  var skus=loadSKUsLocal();
+  var rows=loadLabourRates().filter(function(r){return r.contractorId===cid;})
+    .sort(function(a,b){
+      var an=a.skuId?1:0, bn=b.skuId?1:0;                      // default row first
+      if(an!==bn)return an-bn;
+      var as=a.skuId?(skus.find(function(s){return String(s.id)===String(a.skuId);})||{}).name||'':'';
+      var bs=b.skuId?(skus.find(function(s){return String(s.id)===String(b.skuId);})||{}).name||'':'';
+      return as.localeCompare(bs)||(b.effectiveFrom||'').localeCompare(a.effectiveFrom||'');
+    });
+  if(!rows.length){
+    el.innerHTML='<div style="font-size:13px;color:var(--text-secondary);padding:8px 0;">No rates set. Add a default rate to start.</div>';
+    return;
+  }
+  var today=new Date().toISOString().split('T')[0];
+  el.innerHTML=rows.map(function(r){
+    var sk=r.skuId?skus.find(function(s){return String(s.id)===String(r.skuId);}):null;
+    var label=r.skuId?(sk?sk.name:'⚠ deleted SKU'):'All SKUs (default)';
+    var future=(r.effectiveFrom||'')>today;
+    // A row is superseded if a later row exists for the same scope
+    var superseded=rows.some(function(o){
+      return String(o.skuId||'')===String(r.skuId||'')
+          && (o.effectiveFrom||'')>(r.effectiveFrom||'')
+          && (o.effectiveFrom||'')<=today;
+    });
+    var state=future?'<span class="badge badge-active-s">upcoming</span>'
+      :superseded?'<span class="badge" style="background:var(--bg-secondary);color:var(--text-secondary);">superseded</span>'
+      :'<span class="badge badge-done">current</span>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--border);gap:8px;'+(superseded?'opacity:.55;':'')+'">'+
+      '<div style="flex:1;min-width:0;">'+
+        '<div style="font-size:13px;font-weight:600;">'+label+' '+state+'</div>'+
+        '<div style="font-size:11px;color:var(--text-secondary);">₹'+r.rate+' per unit · from '+r.effectiveFrom+(r.note?' · '+r.note:'')+'</div>'+
+      '</div>'+
+      '<button class="btn btn-sm btn-secondary" onclick="openCorrectRate(\''+r.id+'\')">✎</button>'+
+      '<button class="icon-btn del" onclick="deleteLabourRate(\''+r.id+'\')">🗑️</button>'+
+    '</div>';
+  }).join('');
+}
+
+function openAddRate(){
+  var cid=document.getElementById('lr-contractor').value;
+  if(!cid){alert('Add a contractor first.');return;}
+  editingRateId=null;
+  document.getElementById('rate-modal-title').textContent='Add / Change Rate';
+  document.getElementById('rate-modal-msg').textContent='This adds a new dated rate. Earlier rates are kept, so past settlements still recalculate correctly.';
+  var skus=loadSKUsLocal().slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  document.getElementById('rm-sku').innerHTML=
+    '<option value="">All SKUs (default rate)</option>'+
+    skus.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
+  document.getElementById('rm-rate').value='';
+  document.getElementById('rm-from').value=new Date().toISOString().split('T')[0];
+  document.getElementById('rm-note').value='';
+  document.getElementById('rm-msg').textContent='';
+  document.getElementById('rate-modal').classList.add('open');
+}
+
+function openCorrectRate(id){
+  var r=loadLabourRates().find(function(x){return x.id===id;});
+  if(!r)return;
+  editingRateId=id;
+  document.getElementById('rate-modal-title').textContent='Correct Rate';
+  document.getElementById('rate-modal-msg').textContent='This edits the existing row in place — use it only to fix a typo. To record a genuine rate change, cancel and use "Add / Change Rate" instead.';
+  var skus=loadSKUsLocal().slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  document.getElementById('rm-sku').innerHTML=
+    '<option value="">All SKUs (default rate)</option>'+
+    skus.map(function(s){return '<option value="'+s.id+'"'+(String(s.id)===String(r.skuId)?' selected':'')+'>'+s.name+'</option>';}).join('');
+  document.getElementById('rm-rate').value=r.rate;
+  document.getElementById('rm-from').value=r.effectiveFrom;
+  document.getElementById('rm-note').value=r.note||'';
+  document.getElementById('rm-msg').textContent='';
+  document.getElementById('rate-modal').classList.add('open');
+}
+
+function closeRateModal(){document.getElementById('rate-modal').classList.remove('open');editingRateId=null;}
+
+function saveLabourRate(){
+  var cid=document.getElementById('lr-contractor').value;
+  var skuId=document.getElementById('rm-sku').value||null;
+  var rate=parseFloat(document.getElementById('rm-rate').value);
+  var from=document.getElementById('rm-from').value;
+  var note=document.getElementById('rm-note').value.trim();
+  var msg=document.getElementById('rm-msg');
+  if(isNaN(rate)||rate<0){msg.textContent='Enter a valid rate.';return;}
+  if(!from){msg.textContent='Pick an effective-from date.';return;}
+  var rates=loadLabourRates();
+  if(editingRateId){
+    var idx=rates.findIndex(function(x){return x.id===editingRateId;});
+    if(idx<0){closeRateModal();return;}
+    rates[idx].skuId=skuId; rates[idx].rate=rate; rates[idx].effectiveFrom=from; rates[idx].note=note;
+    rates[idx].correctedBy=CU.username; rates[idx].correctedAt=new Date().toISOString();
+  }else{
+    var clash=rates.find(function(r){
+      return r.contractorId===cid && String(r.skuId||'')===String(skuId||'') && r.effectiveFrom===from;
+    });
+    if(clash){msg.textContent='A rate for this scope already starts on that date — correct it instead.';return;}
+    rates.push({
+      id:'LR'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
+      contractorId:cid, skuId:skuId, rate:rate, effectiveFrom:from, note:note,
+      createdBy:CU.username, createdAt:new Date().toISOString()
+    });
+  }
+  saveLabourRates(rates);
+  closeRateModal();
+  renderLabourRates();
+}
+
+function deleteLabourRate(id){
+  showModal('Remove Rate','Remove this rate row? Any settlement recalculated for that period will fall back to an earlier rate, or be flagged if none exists.',function(){
+    saveLabourRates(loadLabourRates().filter(function(r){return r.id!==id;}));
+    closeModal();
+    renderLabourRates();
+  });
+}
+
 function addContractor(){
   var name=document.getElementById('new-contractor-name').value.trim();
   var phone=document.getElementById('new-contractor-phone').value.trim();
@@ -3645,6 +3986,7 @@ function addContractor(){
   document.getElementById('new-contractor-name').value='';
   document.getElementById('new-contractor-phone').value='';
   renderContractors();
+  renderLabourRates();
 }
 function deleteContractor(id){
   showModal('Remove Contractor','Remove this contractor?',function(){
@@ -3686,6 +4028,8 @@ async function _bkReadAll(){
   var destDoc=await getDoc('config','destinations');
   var contractorsDoc=await getDoc('stock_config','contractors');
   var openingDoc=await getDoc('stock_config','opening');
+  var labourRatesDoc=await getDoc('stock_config','labour_rates');
+  var contractorPaymentsDoc=await getDoc('stock_config','contractor_payments');
   return {
     meta:{version:'1.0',app:'Maruti Loading',exportedAt:new Date().toISOString(),
       counts:{sessions:sessions.length,prodEntries:prodEntries.length,
@@ -3693,7 +4037,8 @@ async function _bkReadAll(){
     sessions:sessions, prod_entries:prodEntries,
     freight_entries:freightEntries, freight_payments:freightPayments,
     config_users:usersDoc, config_skus:skusDoc, config_destinations:destDoc,
-    stock_contractors:contractorsDoc, stock_opening:openingDoc
+    stock_contractors:contractorsDoc, stock_opening:openingDoc,
+    stock_labour_rates:labourRatesDoc, stock_contractor_payments:contractorPaymentsDoc
   };
 }
 
@@ -3748,6 +4093,8 @@ async function doLoadingBackup(){
       zip.file('freight_payments.csv',_bkCSV(data.freight_payments));
       zip.file('prod_entries.csv',_bkCSV(data.prod_entries));
       zip.file('contractors.csv',_bkCSV((data.stock_contractors&&data.stock_contractors.list)||[]));
+      zip.file('labour_rates.csv',_bkCSV((data.stock_labour_rates&&data.stock_labour_rates.list)||[]));
+      zip.file('contractor_payments.csv',_bkCSV((data.stock_contractor_payments&&data.stock_contractor_payments.list)||[]));
       zip.file('skus.csv',_bkCSV((data.config_skus&&data.config_skus.list)||[]));
       zip.file('destinations.csv',_bkCSV((data.config_destinations&&data.config_destinations.list)||[]));
       zip.file('README.txt','Maruti Loading App Backup\nExported: '+data.meta.exportedAt+
@@ -3849,6 +4196,8 @@ async function doLoadingRestore(mode){
       if(data.config_destinations)await db.collection('config').doc('destinations').set(data.config_destinations);
       if(data.stock_contractors)await db.collection('stock_config').doc('contractors').set(data.stock_contractors);
       if(data.stock_opening)await db.collection('stock_config').doc('opening').set(data.stock_opening);
+      if(data.stock_labour_rates)await db.collection('stock_config').doc('labour_rates').set(data.stock_labour_rates);
+      if(data.stock_contractor_payments)await db.collection('stock_config').doc('contractor_payments').set(data.stock_contractor_payments);
     }
     _bkMsg('✅ Restore complete: '+written+' written, '+skipped+' skipped. Reloading…','success');
     _loadingRestoreData=null;
