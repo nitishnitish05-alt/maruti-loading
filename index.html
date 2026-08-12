@@ -235,19 +235,29 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
 
 <!-- LABOUR RATE MODAL -->
 <div class="modal-overlay" id="rate-modal">
-  <div class="modal-box">
-    <div class="modal-title" id="rate-modal-title">Add / Change Rate</div>
-    <div class="modal-msg" id="rate-modal-msg" style="margin-bottom:12px;"></div>
-    <div class="field-label">Applies to</div>
-    <select id="rm-sku"></select>
-    <div class="inline-row" style="margin-bottom:0;">
-      <div><div class="field-label">Rate ₹ per unit</div><input type="number" id="rm-rate" min="0" step="0.01" placeholder="0.00"></div>
-      <div><div class="field-label">Effective from</div><input type="date" id="rm-from"></div>
+  <div class="modal-box" style="max-width:520px;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-title" id="rate-modal-title">Set Rates</div>
+    <div class="modal-msg" id="rate-modal-msg" style="margin-bottom:10px;"></div>
+
+    <div class="field-label">Effective from</div>
+    <input type="date" id="rm-from" onchange="onRateDateChange()" style="margin-bottom:10px;">
+
+    <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;">Default rate — applies to any SKU without its own rate</div>
+      <input type="number" id="rm-default" min="0" step="0.01" placeholder="₹ per unit" style="margin-bottom:0;">
+      <div id="rm-default-cur" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
     </div>
-    <div class="field-label">Note (optional)</div>
-    <input type="text" id="rm-note" placeholder="e.g. revised after Diwali">
-    <div id="rm-msg" style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;min-height:16px;"></div>
-    <button class="btn btn-primary" onclick="saveLabourRate()">Save rate</button>
+
+    <div style="font-size:12px;font-weight:700;margin-bottom:4px;">SKU-specific rates</div>
+    <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">
+      Fill only the SKUs that differ from the default. Blank means no change — use the list behind this dialog to remove a rate.
+    </div>
+    <input type="text" id="rm-search" placeholder="Filter SKUs…" oninput="filterRateGrid()" style="margin-bottom:8px;">
+
+    <div id="rm-grid" style="flex:1;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-md);padding:6px 8px;margin-bottom:10px;min-height:120px;"></div>
+
+    <div id="rm-msg" style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;min-height:16px;"></div>
+    <button class="btn btn-primary" onclick="saveLabourRate()">Save rates</button>
     <button class="btn btn-secondary" onclick="closeRateModal()">Cancel</button>
   </div>
 </div>
@@ -427,7 +437,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div class="field-label">Contractor</div>
       <select id="lr-contractor" onchange="renderLabourRates()"></select>
       <div id="lr-list"></div>
-      <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="openAddRate()">+ Add / Change Rate</button>
+      <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="openAddRate()">+ Add / Change Rates</button>
     </div>
   </div>
 
@@ -1111,6 +1121,12 @@ async function saveUsersSmart(u){SS(K.USERS,u);if(fbOK&&isOnline){const ok=await
 function saveUsers(u){SS(K.USERS,u);saveUsersSmart(u);}
 function loadSKUsLocal(){return LS(K.SKUS)||[{id:1,name:'Kala Bhoot',unit:'bag'},{id:2,name:'Kuch Kuch',unit:'box'},{id:3,name:'Sev Dana',unit:'box'},{id:4,name:'Makeup Box',unit:'bag'},{id:5,name:'Aloo Bhujia',unit:'box'},{id:6,name:'Dilkush',unit:'bag'}];}
 function loadSKUs(){return loadSKUsLocal();}
+// Every user-facing SKU picker must use this. Disabled SKUs stay in the data (old
+// records still resolve their names) but must never be selectable for NEW entries —
+// picking a retired SKU corrupts production tonnage and contractor payment.
+// Admin screens that manage SKUs themselves (master list, merge) deliberately use
+// the unfiltered loadSKUs().
+function activeSKUs(){return loadSKUsLocal().filter(function(sk){return !sk.disabled;});}
 async function saveSKUsSmart(s){SS(K.SKUS,s);if(fbOK&&isOnline){const ok=await window._fb.saveSKUs(s);if(!ok)addPQ('skus','skus');}else addPQ('skus','skus');}
 function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
 function loadDestinationsLocal(){return LS(K.DESTINATIONS)||[];}
@@ -1953,10 +1969,9 @@ function buildEntryHTML(e, ei, ri, skus){
 
 function skuSearch(inp, ri, ei){
   var q = inp.value.trim().toLowerCase();
-  var skus = loadSKUs();
+  var activeskus = activeSKUs();
   var list = document.getElementById('sku-list-'+ri+'-'+ei);
   if(!list) return;
-  var activeskus = skus.filter(function(sk){return !sk.disabled;});
   var matches = q.length===0 ? activeskus : activeskus.filter(function(sk){return sk.name.toLowerCase().indexOf(q)>=0;});
   if(!matches.length){
     list.innerHTML='<div class="sku-ac-empty">No SKU found</div>';
@@ -1986,7 +2001,7 @@ function skuBlur(inp, ri, ei){
     var list = document.getElementById('sku-list-'+ri+'-'+ei);
     if(list) list.style.display='none';
     // If typed text doesn't match any SKU, clear the field
-    var skus=loadSKUs();
+    var skus=activeSKUs();
     var val=inp.value.trim().toLowerCase();
     var match=skus.find(function(sk){return sk.name.toLowerCase()===val;});
     if(!match && val.length>0){
@@ -2870,12 +2885,14 @@ function renderProdStockSKUs(){
   if(!el)return;
   el.innerHTML=prodStockSKUs.map(function(item,i){
     var selSku=skus.find(function(s){return s.id==item.skuId;});
+    var retired=selSku&&selSku.disabled;   // editing an old entry that used a since-disabled SKU
     return '<div style="display:grid;grid-template-columns:1fr 80px 32px;gap:6px;align-items:center;margin-bottom:6px;">'+
       '<div style="position:relative;">'+
         '<input class="ac-input" type="text" placeholder="Type SKU..." value="'+(selSku?selSku.name:'')+'" '+
           'data-idx="'+i+'" data-skuid="'+(item.skuId||'')+'" '+
-          'oninput="psAcSearch(this,'+i+')" onfocus="psAcSearch(this,'+i+')" onblur="psAcBlur(this,'+i+')" autocomplete="off" style="margin-bottom:0;">'+
+          'oninput="psAcSearch(this,'+i+')" onfocus="psAcSearch(this,'+i+')" onblur="psAcBlur(this,'+i+')" autocomplete="off" style="margin-bottom:0;'+(retired?'border-color:var(--amber);':'')+'">'+
         '<div class="ac-list" id="ps-ac-'+i+'" style="display:none;"></div>'+
+        (retired?'<div style="font-size:10px;color:var(--amber);font-weight:600;margin-top:2px;">⚠ this SKU is disabled</div>':'')+
       '</div>'+
       '<input type="number" min="0" placeholder="Qty" value="'+(item.qty||'')+'" onchange="prodStockSKUs['+i+'].qty=this.value" style="margin-bottom:0;font-size:13px;padding:8px;">'+
       '<button class="del-btn" onclick="removeProdStockSKU('+i+')">×</button>'+
@@ -2885,7 +2902,7 @@ function renderProdStockSKUs(){
 
 function psAcSearch(inp,i){
   var q=inp.value.trim().toLowerCase();
-  var skus=loadSKUsLocal();
+  var skus=activeSKUs();
   var list=document.getElementById('ps-ac-'+i);if(!list)return;
   var matches=q.length===0?skus:skus.filter(function(sk){return sk.name.toLowerCase().indexOf(q)>=0;});
   if(!matches.length){list.innerHTML='<div class="ac-empty">No SKU found</div>';list.style.display='block';return;}
@@ -2904,7 +2921,7 @@ function psAcBlur(inp,i){
   setTimeout(function(){
     var list=document.getElementById('ps-ac-'+i);if(list)list.style.display='none';
     var val=inp.value.trim().toLowerCase();if(!val)return;
-    var skus=loadSKUsLocal();
+    var skus=activeSKUs();
     var partial=skus.filter(function(sk){return sk.name.toLowerCase().indexOf(val)>=0;});
     if(partial.length===1)psAcPick(i,partial[0].id,partial[0].name);
     else if(!skus.find(function(sk){return sk.name.toLowerCase()===val;})){prodStockSKUs[i].skuId='';inp.value='';}
@@ -3904,33 +3921,82 @@ function openAddRate(){
   var cid=document.getElementById('lr-contractor').value;
   if(!cid){alert('Add a contractor first.');return;}
   editingRateId=null;
-  document.getElementById('rate-modal-title').textContent='Add / Change Rate';
-  document.getElementById('rate-modal-msg').textContent='This adds a new dated rate. Earlier rates are kept, so past settlements still recalculate correctly.';
-  var skus=loadSKUsLocal().slice().sort(function(a,b){return a.name.localeCompare(b.name);});
-  document.getElementById('rm-sku').innerHTML=
-    '<option value="">All SKUs (default rate)</option>'+
-    skus.map(function(s){return '<option value="'+s.id+'">'+s.name+'</option>';}).join('');
-  document.getElementById('rm-rate').value='';
+  var contractor=loadContractors().find(function(x){return x.id===cid;});
+  document.getElementById('rate-modal-title').textContent='Set Rates — '+(contractor?contractor.name:'');
+  document.getElementById('rate-modal-msg').textContent='Rates you change are saved as new dated rows. Earlier rates are kept, so past settlements still recalculate at what was actually paid.';
   document.getElementById('rm-from').value=new Date().toISOString().split('T')[0];
-  document.getElementById('rm-note').value='';
+  document.getElementById('rm-search').value='';
   document.getElementById('rm-msg').textContent='';
+  buildRateGrid(cid);
   document.getElementById('rate-modal').classList.add('open');
 }
 
+// Full list of ACTIVE SKUs with a rate box each. Existing SKU-specific rates are
+// pre-filled; the inherited default shows as placeholder so blank clearly means
+// "follows the default" rather than "zero".
+function buildRateGrid(cid){
+  var onDate=document.getElementById('rm-from').value||new Date().toISOString().split('T')[0];
+  var def=resolveLabourRate(cid,null,onDate);
+  var dEl=document.getElementById('rm-default');
+  dEl.value = def ? def.rate : '';
+  document.getElementById('rm-default-cur').textContent = def
+    ? 'Currently ₹'+def.rate+' per unit, effective from '+def.effectiveFrom
+    : 'No default rate set yet.';
+
+  var rows=loadLabourRates().filter(function(r){return r.contractorId===cid;});
+  var own=function(skuId){
+    var m=rows.filter(function(r){return String(r.skuId)===String(skuId) && (r.effectiveFrom||'')<=onDate;})
+              .sort(function(a,b){return (b.effectiveFrom||'').localeCompare(a.effectiveFrom||'');});
+    return m.length?m[0]:null;
+  };
+  var skus=activeSKUs().slice().sort(function(a,b){return a.name.localeCompare(b.name);});
+  var grid=document.getElementById('rm-grid');
+  if(!skus.length){grid.innerHTML='<div style="font-size:13px;color:var(--text-secondary);padding:10px 0;">No active SKUs.</div>';return;}
+  grid.innerHTML=skus.map(function(s){
+    var o=own(s.id);
+    return '<div class="rm-row" data-name="'+s.name.toLowerCase()+'" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:0.5px solid var(--border);">'+
+      '<div style="flex:1;min-width:0;font-size:13px;">'+s.name+
+        '<div style="font-size:10px;color:var(--text-secondary);">'+s.unit+(o?' · now ₹'+o.rate:'')+'</div></div>'+
+      '<input type="number" min="0" step="0.01" id="rmg-'+s.id+'" value="'+(o?o.rate:'')+'" '+
+        'placeholder="'+(def?'₹'+def.rate:'—')+'" style="width:86px;margin-bottom:0;font-size:13px;padding:6px 8px;">'+
+    '</div>';
+  }).join('');
+}
+
+// Rates in force differ by date, so moving the effective-from date rebuilds the grid.
+// Skipped while correcting a single row, where the grid isn't in play.
+function onRateDateChange(){
+  if(editingRateId)return;
+  var sel=document.getElementById('lr-contractor');
+  if(sel&&sel.value)buildRateGrid(sel.value);
+}
+
+function filterRateGrid(){
+  var q=(document.getElementById('rm-search').value||'').trim().toLowerCase();
+  document.querySelectorAll('#rm-grid .rm-row').forEach(function(r){
+    r.style.display = (!q || (r.dataset.name||'').indexOf(q)>=0) ? '' : 'none';
+  });
+}
+
+// Correcting a single existing row — reuses the same dialog but locked to one SKU.
 function openCorrectRate(id){
   var r=loadLabourRates().find(function(x){return x.id===id;});
   if(!r)return;
   editingRateId=id;
+  var skus=loadSKUsLocal();
+  var sk=r.skuId?skus.find(function(s){return String(s.id)===String(r.skuId);}):null;
   document.getElementById('rate-modal-title').textContent='Correct Rate';
-  document.getElementById('rate-modal-msg').textContent='This edits the existing row in place — use it only to fix a typo. To record a genuine rate change, cancel and use "Add / Change Rate" instead.';
-  var skus=loadSKUsLocal().slice().sort(function(a,b){return a.name.localeCompare(b.name);});
-  document.getElementById('rm-sku').innerHTML=
-    '<option value="">All SKUs (default rate)</option>'+
-    skus.map(function(s){return '<option value="'+s.id+'"'+(String(s.id)===String(r.skuId)?' selected':'')+'>'+s.name+'</option>';}).join('');
-  document.getElementById('rm-rate').value=r.rate;
+  document.getElementById('rate-modal-msg').textContent='This edits the existing row in place — use it only to fix a typo. To record a genuine rate change, cancel and use "Add / Change Rates" instead.';
   document.getElementById('rm-from').value=r.effectiveFrom;
-  document.getElementById('rm-note').value=r.note||'';
+  document.getElementById('rm-search').value='';
   document.getElementById('rm-msg').textContent='';
+  document.getElementById('rm-default-cur').textContent = r.skuId
+    ? 'Correcting: '+(sk?sk.name:'⚠ deleted SKU')
+    : 'Correcting the default rate (all SKUs).';
+  document.getElementById('rm-default').value=r.rate;
+  document.getElementById('rm-grid').innerHTML=
+    '<div style="font-size:12px;color:var(--text-secondary);padding:10px 4px;">'+
+    'Enter the corrected rate in the box above.</div>';
   document.getElementById('rate-modal').classList.add('open');
 }
 
@@ -3938,31 +4004,60 @@ function closeRateModal(){document.getElementById('rate-modal').classList.remove
 
 function saveLabourRate(){
   var cid=document.getElementById('lr-contractor').value;
-  var skuId=document.getElementById('rm-sku').value||null;
-  var rate=parseFloat(document.getElementById('rm-rate').value);
   var from=document.getElementById('rm-from').value;
-  var note=document.getElementById('rm-note').value.trim();
   var msg=document.getElementById('rm-msg');
-  if(isNaN(rate)||rate<0){msg.textContent='Enter a valid rate.';return;}
   if(!from){msg.textContent='Pick an effective-from date.';return;}
   var rates=loadLabourRates();
+
+  // ── Correction path: edit the one row in place ──
   if(editingRateId){
+    var v=parseFloat(document.getElementById('rm-default').value);
+    if(isNaN(v)||v<0){msg.textContent='Enter a valid rate.';return;}
     var idx=rates.findIndex(function(x){return x.id===editingRateId;});
     if(idx<0){closeRateModal();return;}
-    rates[idx].skuId=skuId; rates[idx].rate=rate; rates[idx].effectiveFrom=from; rates[idx].note=note;
+    rates[idx].rate=v; rates[idx].effectiveFrom=from;
     rates[idx].correctedBy=CU.username; rates[idx].correctedAt=new Date().toISOString();
-  }else{
-    var clash=rates.find(function(r){
-      return r.contractorId===cid && String(r.skuId||'')===String(skuId||'') && r.effectiveFrom===from;
-    });
-    if(clash){msg.textContent='A rate for this scope already starts on that date — correct it instead.';return;}
-    rates.push({
-      id:'LR'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
-      contractorId:cid, skuId:skuId, rate:rate, effectiveFrom:from, note:note,
-      createdBy:CU.username, createdAt:new Date().toISOString()
-    });
+    saveLabourRates(rates); closeRateModal(); renderLabourRates(); return;
   }
-  saveLabourRates(rates);
+
+  // ── Bulk path: write a new dated row only where the value actually changed ──
+  var mk=function(skuId,rate){
+    return {id:'LR'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
+            contractorId:cid, skuId:skuId, rate:rate, effectiveFrom:from, note:'',
+            createdBy:CU.username, createdAt:new Date().toISOString()};
+  };
+  var inForce=function(skuId){
+    var m=rates.filter(function(r){
+      return r.contractorId===cid && String(r.skuId||'')===String(skuId||'') && (r.effectiveFrom||'')<=from;
+    }).sort(function(a,b){return (b.effectiveFrom||'').localeCompare(a.effectiveFrom||'');});
+    return m.length?m[0].rate:null;
+  };
+  var added=[], unchanged=0;
+
+  var dv=document.getElementById('rm-default').value;
+  if(dv!==''){
+    var dnum=parseFloat(dv);
+    if(isNaN(dnum)||dnum<0){msg.textContent='Default rate is not a valid number.';return;}
+    if(inForce(null)!==dnum)added.push(mk(null,dnum)); else unchanged++;
+  }
+
+  var bad=null;
+  activeSKUs().forEach(function(s){
+    var el=document.getElementById('rmg-'+s.id);
+    if(!el||el.value==='')return;
+    var n=parseFloat(el.value);
+    if(isNaN(n)||n<0){bad=bad||s.name;return;}
+    if(inForce(s.id)!==n)added.push(mk(s.id,n)); else unchanged++;
+  });
+  if(bad){msg.textContent='"'+bad+'" has an invalid rate.';return;}
+
+  if(!added.length){
+    msg.textContent = unchanged
+      ? 'Nothing changed — all '+unchanged+' rate(s) already match.'
+      : 'Enter at least one rate.';
+    return;
+  }
+  saveLabourRates(rates.concat(added));
   closeRateModal();
   renderLabourRates();
 }
