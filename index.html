@@ -5112,6 +5112,153 @@ function selectPendingSession(idx){
   },200);
 }
 
+// ═══════════════════════════════════════════════════════
+// DOUBLE-SUBMIT GUARD
+// ═══════════════════════════════════════════════════════
+// On a slow connection a save can take a second or two with no visible response, so
+// staff tap again — and the app writes the record twice. This already happened once
+// with freight entries, which is why addFreightEntry carries its own ad-hoc guard.
+//
+// This app is localStorage-first: most writers are SYNCHRONOUS and return nothing,
+// with the Firebase write fired off in the background. So unlike TradeTrack's
+// promise-based guard, this one releases on a timer — unless the function actually
+// returns a promise (finaliseSession), in which case it waits for that instead.
+//
+// The busy key includes the arguments, so toggling SKU A then SKU B straight after is
+// still allowed; only the SAME action with the SAME arguments is blocked.
+(function(){
+  var GUARDED = [
+    // dispatch
+    'createSession','saveEditSession','finaliseSession',
+    // freight
+    'saveFreightEdit','saveFreightPaymentInline',
+    // production & stock
+    'saveProdStockEntry','saveOpeningStockEntry',
+    // contractor rates & settlements
+    'saveLabourRate','saveSettlement',
+    // masters
+    'addContractor','addSKU','editSKU','toggleSKU',
+    'addDestination','editDestination','toggleDestination','deleteDestination',
+    'addUser','saveEditUser'
+  ];
+  // NOT guarded on purpose:
+  //  • saveSKUs / saveUsers / saveSessions / saveProdEntries / saveDestinations /
+  //    saveContractors / saveLabourRates / saveContractorPayments — internal persistence
+  //    helpers called in loops; blocking a second call would break them.
+  //  • syncQueue / pullCloud / startCloudListener / syncStockToCloud — background sync.
+  //  • addFreightEntry — already has its own guard.
+  //  • Anything behind showModal() — confirmModalAction() nulls the callback before
+  //    invoking it, so a second click on the modal's OK finds nothing to run.
+  var BUSY_MS = 1500;      // covers a slow render plus the Firebase kick-off
+  var busy = {};           // key -> { release:fn, sync:bool }
+  var _lastBtn = null;
+
+  // Most guarded writers validate first and return without writing anything. Holding the
+  // lock after that would swallow the user's corrected retry ("Please enter a name" →
+  // they type it → click → nothing happens). Typing or changing a field is an unambiguous
+  // sign they are correcting input rather than double-tapping, so release straight away.
+  // Only synchronous calls are released this way — an in-flight async save keeps its lock.
+  function releaseIdleLocks(){
+    Object.keys(busy).forEach(function(k){
+      var b = busy[k];
+      if(b && b.sync && typeof b.release === 'function') b.release();
+    });
+  }
+  ['input','change'].forEach(function(ev){
+    document.addEventListener(ev, releaseIdleLocks, true);
+  });
+
+  // Capture phase, so we know which button was pressed before its handler runs
+  document.addEventListener('click', function(e){
+    try{
+      var b = e.target && e.target.closest ? e.target.closest('button') : null;
+      if(b) _lastBtn = b;
+    }catch(err){}
+  }, true);
+
+  function keyFor(name, args){
+    var a = '';
+    try{
+      for(var i=0;i<args.length;i++){
+        var v = args[i];
+        if(v===null||v===undefined) a+='|';
+        else if(typeof v==='object') a+='|obj';
+        else a+='|'+String(v);
+      }
+    }catch(err){ a='|?'; }
+    return name+a;
+  }
+
+  function wrap(name){
+    var orig = window[name];
+    if(typeof orig !== 'function' || orig.__dcGuarded) return false;
+    var w = function(){
+      var key = keyFor(name, arguments);
+      if(busy[key]) return;                 // duplicate press inside the window — drop it
+
+      // Visual feedback on the button that was actually pressed
+      var btn = _lastBtn, label = null;
+      if(btn && !btn.disabled){
+        label = btn.innerHTML;
+        btn.disabled = true;
+        btn.style.opacity = '0.55';
+        btn.style.pointerEvents = 'none';
+      }
+      var released = false;
+      var release = function(){
+        if(released) return; released = true;
+        delete busy[key];
+        _current = null;
+        // The button is often replaced by a re-render; restoring a detached node is harmless
+        if(btn && label !== null){
+          btn.disabled = false;
+          btn.style.opacity = '';
+          btn.style.pointerEvents = '';
+          btn.innerHTML = label;
+        }
+      };
+
+      // Registered as sync until proven otherwise, so a validation-only call can be
+      // released by the user's next keystroke.
+      busy[key] = { release: release, sync: true };
+      var _current = key;
+
+      var r;
+      try{
+        r = orig.apply(this, arguments);
+      }catch(err){
+        release();                          // never leave a button stuck after a throw
+        throw err;
+      }
+      if(r && typeof r.then === 'function'){
+        if(busy[key]) busy[key].sync = false;   // real async work — hold the lock till it settles
+        r.then(release, release);
+      } else {
+        setTimeout(release, BUSY_MS);
+      }
+      // Safety net: release regardless, so a hung promise can't lock the button forever
+      setTimeout(release, 8000);
+      return r;
+    };
+    w.__dcGuarded = true;
+    window[name] = w;
+    return true;
+  }
+
+  function install(){
+    var n = 0;
+    GUARDED.forEach(function(name){ if(wrap(name)) n++; });
+    if(n < GUARDED.length){
+      console.warn('double-submit guard: wrapped ' + n + '/' + GUARDED.length +
+        ' — unwrapped: ' + GUARDED.filter(function(x){
+          return !(window[x] && window[x].__dcGuarded);
+        }).join(', '));
+    }
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install);
+  else install();
+})();
+
 </script>
 </body>
 </html>
