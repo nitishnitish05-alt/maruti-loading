@@ -826,8 +826,20 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
           <input type="text" id="fl-truck-input" placeholder="e.g. UP 77 BA 1234" oninput="autoFmtTruck(this)" style="flex:1;text-transform:uppercase;" autocomplete="off">
           <button class="btn btn-primary btn-sm" onclick="searchTruckLedger()">Search</button>
         </div>
-        <div class="field-label" style="margin-top:10px;">As of date <span style="font-size:11px;color:var(--text-secondary);">(optional — leave blank for full history)</span></div>
-        <input type="date" id="fl-asof-date" style="margin-bottom:0;">
+        <div class="field-label" style="margin-top:10px;">Freight period <span style="font-size:11px;color:var(--text-secondary);">(leave both blank for full history)</span></div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;">From</div>
+            <input type="date" id="fl-from-date" style="margin-bottom:0;">
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:2px;">To</div>
+            <input type="date" id="fl-asof-date" style="margin-bottom:0;">
+          </div>
+        </div>
+        <div class="field-label" style="margin-top:10px;">Payments included up to
+          <span style="font-size:11px;color:var(--text-secondary);">(blank = same as freight To)</span></div>
+        <input type="date" id="fl-payto-date" style="margin-bottom:0;">
       </div>
       <div id="fl-truck-result"></div>
     </div>
@@ -4678,6 +4690,80 @@ function fetchFreshFreight(cb){
     });
   } else { cb(); }
 }
+// Freight period and payment cut-off are deliberately independent: a settlement often
+// covers trips up to one date but only the payments made up to an earlier one.
+//
+//   gross balance = total freight − advance − customer payable   (stored as balanceByUs)
+//   net payable   = opening balance + period gross − payments in period
+//
+// Opening balance = everything dated BEFORE `from` (freight balance minus payments),
+// so consecutive statements chain: this statement's closing is the next one's opening.
+// Payments falling between payTo and the next `from` are swept into that opening, so
+// nothing is ever lost between statements.
+function computeTruckLedger(truck, from, to, payTo){
+  var allEntries=loadFreightEntries().filter(function(e){return e.truckNo===truck;})
+    .sort(function(a,b){return a.date>b.date?1:-1;});
+  var allPayments=loadFreightPayments().filter(function(p){return p.truckNo===truck;})
+    .sort(function(a,b){return a.date>b.date?1:-1;});
+
+  var effPayTo = payTo || to || '';   // blank payment cut-off follows the freight To date
+
+  var entries=allEntries.filter(function(e){
+    if(from && e.date<from) return false;
+    if(to   && e.date>to)   return false;
+    return true;
+  });
+  var payments=allPayments.filter(function(p){
+    if(from && p.date<from) return false;
+    if(effPayTo && p.date>effPayTo) return false;
+    return true;
+  });
+
+  // Opening balance — only meaningful once a From date narrows the window
+  var openFreightBal=0, openPaid=0, openTrips=0;
+  if(from){
+    allEntries.forEach(function(e){ if(e.date<from){ openFreightBal+=(e.balanceByUs||0); openTrips++; } });
+    allPayments.forEach(function(p){ if(p.date<from){ openPaid+=(p.amount||0); } });
+  }
+  var opening=openFreightBal-openPaid;
+
+  var totalFreight=entries.reduce(function(s,e){return s+(e.totalFreight||0);},0);
+  var totalAdvance=entries.reduce(function(s,e){return s+(e.advance||0);},0);
+  var totalCustPay=entries.reduce(function(s,e){return s+(e.customerPayable||0);},0);
+  var grossBalance=entries.reduce(function(s,e){return s+(e.balanceByUs||0);},0);
+  var totalPaid=payments.reduce(function(s,p){return s+(p.amount||0);},0);
+
+  return {
+    truck:truck, from:from||'', to:to||'', payTo:effPayTo,
+    entries:entries, payments:payments,
+    openTrips:openTrips, openFreightBal:openFreightBal, openPaid:openPaid, opening:opening,
+    totalFreight:totalFreight, totalAdvance:totalAdvance, totalCustPay:totalCustPay,
+    grossBalance:grossBalance, totalPaid:totalPaid,
+    closing:opening+grossBalance-totalPaid,
+    hasOpening:!!from,
+    // True when the two cut-offs differ — the report must say so prominently
+    splitDates:!!(effPayTo && to && effPayTo!==to)
+  };
+}
+
+// Human-readable description of exactly what a statement covers
+function ledgerPeriodLabel(L){
+  var f=function(d){return d?fmtDMY(d):null;};
+  var fr = L.from&&L.to ? f(L.from)+' → '+f(L.to)
+         : L.to        ? 'up to '+f(L.to)
+         : L.from      ? 'from '+f(L.from)+' onwards'
+         : 'full history';
+  var pay = L.payTo ? 'payments up to '+f(L.payTo) : 'all payments';
+  return {freight:fr, payments:pay};
+}
+function fmtDMY(d){
+  if(!d) return '';
+  var p=String(d).split('-');
+  if(p.length!==3) return d;
+  var m=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return p[2]+' '+(m[parseInt(p[1],10)-1]||p[1])+' '+p[0];
+}
+
 function searchTruckLedger(){fetchFreshFreight(function(){_renderTruckLedger();});}
 function searchDateLedger(){fetchFreshFreight(function(){_renderDateLedger();});}
 
@@ -4692,16 +4778,19 @@ function _renderTruckLedger(){
   var payments=loadFreightPayments().filter(function(p){return p.truckNo===truck;})
     .sort(function(a,b){return a.date>b.date?1:-1;});
 
-  // Apply asOf filter BEFORE calculating totals so summary matches displayed data
-  var asOf=document.getElementById('fl-asof-date').value||'';
-  if(asOf){ entries=entries.filter(function(e){return e.date<=asOf;}); payments=payments.filter(function(p){return p.date<=asOf;}); }
-
-  var totalFreight=entries.reduce(function(s,e){return s+e.totalFreight;},0);
-  var totalAdvance=entries.reduce(function(s,e){return s+e.advance;},0);
-  var totalCustPay=entries.reduce(function(s,e){return s+e.customerPayable;},0);
-  var totalBalDue=entries.reduce(function(s,e){return s+e.balanceByUs;},0);
-  var totalPaid=payments.reduce(function(s,p){return s+p.amount;},0);
-  var netOutstanding=totalBalDue-totalPaid;
+  var from=document.getElementById('fl-from-date').value||'';
+  var to=document.getElementById('fl-asof-date').value||'';
+  var payTo=document.getElementById('fl-payto-date').value||'';
+  if(from&&to&&from>to){
+    document.getElementById('fl-truck-result').innerHTML=
+      '<div class="card" style="border-left:3px solid var(--red);"><div style="font-size:13px;color:var(--red);">'+
+      '"From" date is after "To" date — please correct the freight period.</div></div>';
+    return;
+  }
+  var L=computeTruckLedger(truck,from,to,payTo);
+  var lbl=ledgerPeriodLabel(L);
+  var entries=L.entries, payments=L.payments;
+  var inr=function(n){return '&#8377;'+Math.round(n).toLocaleString('en-IN');};
 
   var adminOnly=isAdmin();
   var canPrint=isAdmin();
@@ -4710,15 +4799,33 @@ function _renderTruckLedger(){
   window._ftPayIds=payments.map(function(p){return p.id;});
 
   var html='<div class="freight-summary">';
-  html+='<div style="font-size:15px;font-weight:700;margin-bottom:8px;">'+truck+(asOf?' <span style="font-size:11px;font-weight:400;color:var(--text-secondary);">as of '+asOf+'</span>':'')+'</div>';
-  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:13px;">';
-  html+='<div>Total Trips: <b>'+entries.length+'</b></div>';
-  html+='<div>Total Freight: <b>&#8377;'+totalFreight.toLocaleString('en-IN')+'</b></div>';
-  html+='<div>Total Advance: <b>&#8377;'+totalAdvance.toLocaleString('en-IN')+'</b></div>';
-  html+='<div>Customer Payable: <b>&#8377;'+totalCustPay.toLocaleString('en-IN')+'</b></div>';
-  html+='<div>Total Paid By Us: <b>&#8377;'+totalPaid.toLocaleString('en-IN')+'</b></div>';
-  html+='<div>Net Outstanding: <b class="'+(netOutstanding>0?'fbal-positive':'fbal-zero')+'">&#8377;'+netOutstanding.toLocaleString('en-IN')+'</b></div>';
-  html+='</div></div>';
+  html+='<div style="font-size:15px;font-weight:700;">'+truck+'</div>';
+  html+='<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Freight '+lbl.freight+' &middot; '+lbl.payments+'</div>';
+  if(L.splitDates){
+    html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:6px 9px;font-size:11px;color:#8a6d00;font-weight:600;margin-bottom:8px;">'+
+      '&#9888; Freight counted to '+fmtDMY(L.to)+' but payments only to '+fmtDMY(L.payTo)+'.</div>';
+  }
+
+  // Statement layout — each line leads to the next, ending at what is actually payable
+  var row=function(label,val,opts){
+    opts=opts||{};
+    return '<div style="display:flex;justify-content:space-between;gap:10px;padding:'+(opts.big?'7px 0':'3px 0')+';'+
+      (opts.rule?'border-top:1px solid var(--border);margin-top:3px;':'')+'">'+
+      '<span style="font-size:'+(opts.big?'13px':'12px')+';'+(opts.big?'font-weight:700;':'color:var(--text-secondary);')+'">'+label+'</span>'+
+      '<span style="font-size:'+(opts.big?'14px':'12px')+';font-weight:'+(opts.big?'800':'600')+';'+(opts.color?'color:'+opts.color+';':'')+'">'+val+'</span></div>';
+  };
+
+  if(L.hasOpening){
+    html+=row('Opening balance as on '+fmtDMY(L.from)+(L.openTrips?' ('+L.openTrips+' earlier trips)':''),inr(L.opening),{big:true});
+  }
+  html+=row('Total freight &mdash; '+entries.length+' trip'+(entries.length===1?'':'s'),inr(L.totalFreight));
+  html+=row('Less: advance paid by us',        '&minus; '+inr(L.totalAdvance));
+  html+=row('Less: customer payable',          '&minus; '+inr(L.totalCustPay));
+  html+=row('Gross balance for period',        inr(L.grossBalance),{big:true,rule:true});
+  html+=row('Less: payments made'+(L.payTo?' (to '+fmtDMY(L.payTo)+')':''),'&minus; '+inr(L.totalPaid));
+  html+=row('Net payable to driver',           inr(L.closing),
+        {big:true,rule:true,color:(L.closing>0?'var(--red)':'var(--green)')});
+  html+='</div>';
 
   // Action buttons + inline payment form
   if(canPrint) html+='<div style="margin-bottom:10px;"><button class="btn btn-secondary btn-sm" onclick="printTruckLedger(window._ftTruck)">&#128424; Print Ledger</button></div>';
@@ -4816,14 +4923,15 @@ function _renderDateLedger(){
 // ═══════════════════════════════════════════════════════
 function printTruckLedger(truck){
   if(!isAdmin()){alert('Only admin can print.');return;}
-  var entries=loadFreightEntries().filter(function(e){return e.truckNo===truck;})
-    .sort(function(a,b){return a.date>b.date?1:-1;});
-  var payments=loadFreightPayments().filter(function(p){return p.truckNo===truck;})
-    .sort(function(a,b){return a.date>b.date?1:-1;});
-  var totalFreight=entries.reduce(function(s,e){return s+e.totalFreight;},0);
-  var totalBal=entries.reduce(function(s,e){return s+e.balanceByUs;},0);
-  var totalPaid=payments.reduce(function(s,p){return s+p.amount;},0);
-  var netOutstanding=totalBal-totalPaid;
+  // Read the same filters the screen is showing, so the printed statement can never
+  // disagree with what was on screen — the old version re-derived its own unfiltered data.
+  var from=(document.getElementById('fl-from-date')||{}).value||'';
+  var to=(document.getElementById('fl-asof-date')||{}).value||'';
+  var payTo=(document.getElementById('fl-payto-date')||{}).value||'';
+  var L=computeTruckLedger(truck,from,to,payTo);
+  var lbl=ledgerPeriodLabel(L);
+  var entries=L.entries, payments=L.payments;
+  var inr=function(n){return '&#8377;'+Math.round(n).toLocaleString('en-IN');};
   var printDate=new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 
   var tripRows=entries.map(function(e,i){
@@ -4831,41 +4939,68 @@ function printTruckLedger(truck){
       +'<td>'+(i+1)+'</td>'
       +'<td>'+e.date+'</td>'
       +'<td>'+e.destination+'</td>'
-      +'<td style="text-align:right;">&#8377;'+e.totalFreight.toLocaleString('en-IN')+'</td>'
-      +'<td style="text-align:right;">&#8377;'+e.advance.toLocaleString('en-IN')+'</td>'
-      +'<td style="text-align:right;">&#8377;'+e.customerPayable.toLocaleString('en-IN')+'</td>'
-      +'<td style="text-align:right;'+(e.balanceByUs>0?'color:#c0392b;font-weight:700;':'')+'">&#8377;'+e.balanceByUs.toLocaleString('en-IN')+'</td>'
+      +'<td style="text-align:right;">'+inr(e.totalFreight)+'</td>'
+      +'<td style="text-align:right;">'+inr(e.advance)+'</td>'
+      +'<td style="text-align:right;">'+inr(e.customerPayable)+'</td>'
+      +'<td style="text-align:right;'+(e.balanceByUs>0?'color:#c0392b;font-weight:700;':'')+'">'+inr(e.balanceByUs)+'</td>'
       +'<td style="text-align:center;">'+(e.receiptReceived?'Yes':'No')+'</td>'
       +'<td>'+(e.notes||'')+'</td>'
       +'</tr>';
   }).join('');
+  var tripTotalRow='<tr style="font-weight:700;background:#f5f5f5;">'
+      +'<td colspan="3">Period total</td>'
+      +'<td style="text-align:right;">'+inr(L.totalFreight)+'</td>'
+      +'<td style="text-align:right;">'+inr(L.totalAdvance)+'</td>'
+      +'<td style="text-align:right;">'+inr(L.totalCustPay)+'</td>'
+      +'<td style="text-align:right;">'+inr(L.grossBalance)+'</td>'
+      +'<td colspan="2"></td></tr>';
 
   var payRows=payments.map(function(p){
-    return '<tr><td>'+p.date+'</td><td style="text-align:right;">&#8377;'+p.amount.toLocaleString('en-IN')+'</td><td>'+p.addedBy+'</td><td>'+(p.notes||'')+'</td></tr>';
+    return '<tr><td>'+p.date+'</td><td style="text-align:right;">'+inr(p.amount)+'</td><td>'+p.addedBy+'</td><td>'+(p.notes||'')+'</td></tr>';
   }).join('');
+  var payTotalRow=payments.length?'<tr style="font-weight:700;background:#f5f5f5;"><td>Total paid</td><td style="text-align:right;">'+inr(L.totalPaid)+'</td><td colspan="2"></td></tr>':'';
+
+  // Settlement statement — the figure the driver is actually paid
+  var sRow=function(label,val,strong,color){
+    return '<tr'+(strong?' style="font-weight:700;background:#f5f5f5;"':'')+'>'
+      +'<td>'+label+'</td>'
+      +'<td style="text-align:right;'+(color?'color:'+color+';':'')+'">'+val+'</td></tr>';
+  };
+  var stmt='<table style="max-width:420px;">';
+  if(L.hasOpening) stmt+=sRow('Opening balance as on '+fmtDMY(L.from)+(L.openTrips?' ('+L.openTrips+' earlier trips)':''),inr(L.opening),true);
+  stmt+=sRow('Total freight ('+entries.length+' trip'+(entries.length===1?'':'s')+')',inr(L.totalFreight));
+  stmt+=sRow('Less: advance paid by us','&minus; '+inr(L.totalAdvance));
+  stmt+=sRow('Less: customer payable','&minus; '+inr(L.totalCustPay));
+  stmt+=sRow('Gross balance for period',inr(L.grossBalance),true);
+  stmt+=sRow('Less: payments made'+(L.payTo?' (to '+fmtDMY(L.payTo)+')':''),'&minus; '+inr(L.totalPaid));
+  stmt+=sRow('NET PAYABLE TO DRIVER',inr(L.closing),true,(L.closing>0?'#c0392b':'#27ae60'));
+  stmt+='</table>';
 
   var html='<!DOCTYPE html><html><head><meta charset="utf-8">'
     +'<title>Freight Ledger - '+truck+'</title>'
     +'<style>@page{margin:1.2cm;}body{font-family:Arial,sans-serif;font-size:12px;color:#222;}'
     +'h2{margin:0 0 2px;font-size:16px;}h3{font-size:13px;margin:16px 0 6px;}'
-    +'.sub{font-size:11px;color:#666;margin-bottom:12px;}'
+    +'.sub{font-size:11px;color:#666;margin-bottom:4px;}'
+    +'.period{font-size:12px;font-weight:700;border:1px solid #ccc;background:#fafafa;border-radius:4px;padding:7px 10px;margin:8px 0 14px;}'
+    +'.warn{font-size:11px;color:#8a6d00;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;padding:6px 9px;margin-bottom:12px;}'
     +'table{width:100%;border-collapse:collapse;margin-bottom:12px;}'
     +'th{background:#f0f0f0;font-size:10px;text-transform:uppercase;padding:6px 8px;text-align:left;border-bottom:2px solid #ccc;}'
     +'td{padding:5px 8px;border-bottom:1px solid #eee;}'
-    +'.summary-box{background:#f9f9f9;border:1px solid #ddd;border-radius:4px;padding:10px;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}'
-    +'.sum-item{font-size:12px;}.sum-val{font-size:15px;font-weight:700;}'
-    +'.outstanding{color:#c0392b;}.settled{color:#27ae60;}</style></head><body>'
-    +'<h2>Maruti Namkeen &#8212; Freight Ledger</h2>'
+    +'.sign{margin-top:34px;display:flex;justify-content:space-between;font-size:11px;color:#555;}'
+    +'.sign div{border-top:1px solid #999;padding-top:4px;width:200px;text-align:center;}</style></head><body>'
+    +'<h2>Maruti Namkeen &#8212; Freight Settlement Statement</h2>'
     +'<div class="sub">Truck: <b>'+truck+'</b> &nbsp;|&nbsp; Printed: '+printDate+'</div>'
-    +'<div class="summary-box">'
-    +'<div class="sum-item"><div>Total Freight</div><div class="sum-val">&#8377;'+totalFreight.toLocaleString('en-IN')+'</div></div>'
-    +'<div class="sum-item"><div>Total Paid By Us</div><div class="sum-val">&#8377;'+totalPaid.toLocaleString('en-IN')+'</div></div>'
-    +'<div class="sum-item"><div>Net Outstanding</div><div class="sum-val '+(netOutstanding>0?'outstanding':'settled')+'">&#8377;'+netOutstanding.toLocaleString('en-IN')+'</div></div>'
-    +'</div>'
+    +'<div class="period">Freight: '+lbl.freight+' &nbsp;&nbsp;|&nbsp;&nbsp; Payments: '+lbl.payments+'</div>'
+    +(L.splitDates?'<div class="warn">&#9888; This settlement counts freight up to '+fmtDMY(L.to)+' but only payments made up to '+fmtDMY(L.payTo)+'. Payments after that date are not deducted here.</div>':'')
+    +'<h3>Settlement Summary</h3>'
+    +stmt
     +'<h3>Trip Entries ('+entries.length+')</h3>'
     +'<table><thead><tr><th>#</th><th>Date</th><th>Destination</th><th>Total &#8377;</th><th>Advance &#8377;</th><th>Customer &#8377;</th><th>Our Balance &#8377;</th><th>Receipt</th><th>Notes</th></tr></thead>'
-    +'<tbody>'+tripRows+'</tbody></table>'
-    +(payments.length?'<h3>Payment History</h3><table><thead><tr><th>Date</th><th>Amount &#8377;</th><th>By</th><th>Notes</th></tr></thead><tbody>'+payRows+'</tbody></table>':'')
+    +'<tbody>'+(tripRows||'<tr><td colspan="9" style="text-align:center;color:#888;">No trips in this period</td></tr>')+(entries.length?tripTotalRow:'')+'</tbody></table>'
+    +(payments.length
+        ? '<h3>Payments'+(L.payTo?' (up to '+fmtDMY(L.payTo)+')':'')+'</h3><table><thead><tr><th>Date</th><th>Amount &#8377;</th><th>By</th><th>Notes</th></tr></thead><tbody>'+payRows+payTotalRow+'</tbody></table>'
+        : '<h3>Payments</h3><div style="font-size:12px;color:#888;margin-bottom:12px;">No payments in this period.</div>')
+    +'<div class="sign"><div>Driver / Transporter</div><div>For Maruti Namkeen</div></div>'
     +'</body></html>';
 
   var iframe=document.getElementById('print-iframe');
