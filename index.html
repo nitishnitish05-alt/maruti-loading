@@ -243,7 +243,7 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
     <input type="date" id="rm-from" onchange="onRateDateChange()" style="margin-bottom:10px;">
 
     <div style="background:var(--bg-secondary);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:12px;">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px;">Default rate — applies to any SKU without its own rate</div>
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;" id="rm-default-label">Default rate — applies to any SKU without its own rate</div>
       <input type="number" id="rm-default" min="0" step="0.01" placeholder="₹ per unit" style="margin-bottom:0;">
       <div id="rm-default-cur" style="font-size:11px;color:var(--text-secondary);margin-top:4px;"></div>
     </div>
@@ -407,6 +407,18 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       </div>
       <button class="btn btn-primary" style="margin-top:10px;" onclick="addSKU()">+ Add SKU</button>
     </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+        <div style="font-size:13px;font-weight:700;">🏷 Product Category</div>
+        <button class="btn btn-sm btn-secondary" onclick="toggleProdCatReview()" id="pcr-toggle">Review all</button>
+      </div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">
+        Marks each SKU as namkeen or snacks. Namkeen production is paid per kg to the karigars,
+        so only namkeen tonnage counts towards their ledger.
+      </div>
+      <div id="pcr-summary" style="font-size:12px;"></div>
+      <div id="pcr-body" style="display:none;margin-top:12px;"></div>
+    </div>
     <div class="card"><div id="sku-list"></div></div>
   </div>
   <div id="panel-destinations" style="display:none;">
@@ -425,6 +437,11 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
       <div style="font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;">Add new contractor</div>
       <input type="text" id="new-contractor-name" placeholder="Contractor name" autocomplete="off">
       <input type="text" id="new-contractor-phone" placeholder="Phone (optional)" autocomplete="off">
+      <div class="field-label">Paid for</div>
+      <select id="new-contractor-type">
+        <option value="packing">Packing — rate per unit packed</option>
+        <option value="production">Production (karigar) — rate per kg of namkeen made</option>
+      </select>
       <button class="btn btn-primary" onclick="addContractor()">+ Add Contractor</button>
     </div>
     <div class="card"><div id="contractors-list"></div></div>
@@ -714,6 +731,39 @@ input:focus, select:focus { outline: none; border-color: var(--blue); }
   <div id="wr-output"></div>
 </div>
 
+<div class="screen" id="screen-karigar-ledger">
+  <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
+  <div class="page-title">Namkeen Karigar Ledger</div>
+  <div class="page-sub">Payment due on namkeen made, against payments given</div>
+  <div class="card">
+    <div class="field-label">Karigar team</div>
+    <select id="kl-contractor" onchange="renderKarigarLedger()"></select>
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">From</div><input type="date" id="kl-from"></div>
+      <div><div class="field-label">To</div><input type="date" id="kl-to"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+      <button class="btn btn-primary" style="flex:1;" onclick="renderKarigarLedger()">Show ledger</button>
+      <button class="btn btn-secondary no-print" onclick="printKarigarLedger()">🖨 Print</button>
+    </div>
+  </div>
+  <div id="kl-output"></div>
+  <div class="card no-print">
+    <div style="font-size:13px;font-weight:700;margin-bottom:4px;">⚖ Work In Progress</div>
+    <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;line-height:1.6;">
+      Namkeen made but not yet packed. Record the total on hand at period end and the ledger
+      adjusts automatically &mdash; without it, a month that builds WIP underpays the karigars.
+    </div>
+    <div class="inline-row" style="margin-bottom:0;">
+      <div><div class="field-label">As on date</div><input type="date" id="wip-date"></div>
+      <div><div class="field-label">Total unpacked kg</div><input type="number" id="wip-kg" min="0" step="0.01" placeholder="0"></div>
+    </div>
+    <input type="text" id="wip-notes" placeholder="Notes (optional)" style="margin-top:8px;">
+    <button class="btn btn-primary" style="margin-top:10px;" onclick="saveWipEntry()">Save WIP reading</button>
+    <div id="wip-list" style="margin-top:12px;"></div>
+  </div>
+</div>
+
 <div class="screen" id="screen-contractor-report">
   <div class="nav-back" onclick="goToStock()">&#8592; Back</div>
   <div class="page-title">Contractor Report</div>
@@ -914,6 +964,10 @@ try {
     async loadDestinations(){try{const sn=await _db.collection("config").doc("destinations").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){return false;}},
     async saveLabourRates(r){try{await _db.collection("stock_config").doc("labour_rates").set({list:r});return true;}catch(e){return false;}},
+    async saveWipReadings(w){try{await _db.collection("stock_config").doc("wip_readings").set({list:w});return true;}catch(e){return false;}},
+    async loadWipReadings(){try{const sn=await _db.collection("stock_config").doc("wip_readings").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
+    async saveKarigarPayments(p){try{await _db.collection("stock_config").doc("karigar_payments").set({list:p});return true;}catch(e){return false;}},
+    async loadKarigarPayments(){try{const sn=await _db.collection("stock_config").doc("karigar_payments").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async loadLabourRates(){try{const sn=await _db.collection("stock_config").doc("labour_rates").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveContractorPayments(p){try{await _db.collection("stock_config").doc("contractor_payments").set({list:p});return true;}catch(e){return false;}},
     async loadContractorPayments(){try{const sn=await _db.collection("stock_config").doc("contractor_payments").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
@@ -985,6 +1039,8 @@ async function syncQueue(){
       else if(item.type==='destinations'){const ok=await window._fb.saveDestinations(loadDestinationsLocal());if(ok)delPQ('destinations','destinations');else fail++;}
       else if(item.type==='contractors'&&window._fb.saveContractors){const ok=await window._fb.saveContractors(loadContractors());if(ok)delPQ('contractors','contractors');else fail++;}
       else if(item.type==='labour_rates'&&window._fb.saveLabourRates){const ok=await window._fb.saveLabourRates(loadLabourRates());if(ok)delPQ('labour_rates','labour_rates');else fail++;}
+      else if(item.type==='wip_readings'&&window._fb.saveWipReadings){const ok=await window._fb.saveWipReadings(loadWipReadings());if(ok)delPQ('wip_readings','wip_readings');else fail++;}
+      else if(item.type==='karigar_payments'&&window._fb.saveKarigarPayments){const ok=await window._fb.saveKarigarPayments(loadKarigarPayments());if(ok)delPQ('karigar_payments','karigar_payments');else fail++;}
       else if(item.type==='contractor_payments'&&window._fb.saveContractorPayments){const ok=await window._fb.saveContractorPayments(loadContractorPayments());if(ok)delPQ('contractor_payments','contractor_payments');else fail++;}
       else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
       else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
@@ -1028,6 +1084,12 @@ async function pullCloud(){
     }
     if(window._fb.loadLabourRates){
       const clr=await window._fb.loadLabourRates();if(clr)SS(SK.LABOUR_RATES,clr);
+    }
+    if(window._fb.loadWipReadings){
+      const cw=await window._fb.loadWipReadings();if(cw)SS(SK.WIP,cw);
+    }
+    if(window._fb.loadKarigarPayments){
+      const ckp=await window._fb.loadKarigarPayments();if(ckp)SS(SK.KARIGAR_PAYMENTS,ckp);
     }
     if(window._fb.loadContractorPayments){
       const ccp=await window._fb.loadContractorPayments();if(ccp)SS(SK.CONTRACTOR_PAYMENTS,ccp);
@@ -1139,6 +1201,42 @@ function loadSKUs(){return loadSKUsLocal();}
 // Admin screens that manage SKUs themselves (master list, merge) deliberately use
 // the unfiltered loadSKUs().
 function activeSKUs(){return loadSKUsLocal().filter(function(sk){return !sk.disabled;});}
+
+// ── PRODUCT CATEGORY (namkeen / snacks) ───────────────────────────
+// Lives on Loading's own SKU master, deliberately NOT synced from Costing — adding it to
+// the sync payload would mean re-syncing every SKU, which is exactly what we're avoiding.
+// Costing stays the master for weights and recipes; "who made this and how are they paid"
+// is a Loading concern.
+function skuProdCat(sk){ return (sk && sk.prodCat) || ''; }
+
+// Best guess from the SKU name, so the review screen starts mostly filled in.
+// Snacks words are checked first — "Fryums Chawal" contains no namkeen word, but
+// something like "Masala Pipe" would otherwise match on the wrong side.
+var SNACK_WORDS = ['fryum','kurmura','kurkura','puff','pipe','wheel','katori','ring','cone',
+                   'noodle','pasta','abcd','alphabet','stick','ball','chips','pellet','crisp',
+                   'popcorn','corn','2d','3d','snack'];
+var NAMKEEN_WORDS = ['bhujia','bhujiya','sev','dal','daal','mixture','namkeen','chana','moong',
+                     'peanut','moongfali','mungfali','papdi','gathiya','boondi','laccha','falahar',
+                     'khatta','meetha','nimko','chivda','poha','mathri','shakkarpara','bhel',
+                     'masala','dana','katori dana'];
+function guessProdCat(name){
+  var n=(name||'').toLowerCase();
+  for(var i=0;i<SNACK_WORDS.length;i++) if(n.indexOf(SNACK_WORDS[i])>=0) return 'snacks';
+  for(var j=0;j<NAMKEEN_WORDS.length;j++) if(n.indexOf(NAMKEEN_WORDS[j])>=0) return 'namkeen';
+  return '';
+}
+function prodCatBadge(cat){
+  if(cat==='namkeen') return '<span class="badge badge-done" style="font-size:10px;">Namkeen</span>';
+  if(cat==='snacks')  return '<span class="badge" style="font-size:10px;background:#e8f0fb;color:#2d6a9f;">Snacks</span>';
+  return '<span class="badge" style="font-size:10px;background:#fdecea;color:#c0392b;">Not set</span>';
+}
+async function setProdCat(id,cat){
+  var skus=loadSKUs();
+  var sk=skus.find(function(s){return s.id==id;});
+  if(!sk)return;
+  if(cat) sk.prodCat=cat; else delete sk.prodCat;
+  saveSKUs(skus); renderSKUs(); renderProdCatReview();
+}
 async function saveSKUsSmart(s){SS(K.SKUS,s);if(fbOK&&isOnline){const ok=await window._fb.saveSKUs(s);if(!ok)addPQ('skus','skus');}else addPQ('skus','skus');}
 function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
 function loadDestinationsLocal(){return LS(K.DESTINATIONS)||[];}
@@ -1356,6 +1454,7 @@ function goTo(s){
   if(s==='screen-add-production-stock')initProdStockForm();
   if(s==='screen-opening-stock')initOpeningStockForm();
   if(s==='screen-contractor-report')initContractorReport();
+  if(s==='screen-karigar-ledger')initKarigarLedger();
   if(s==='screen-freight')initFreightScreen();
   if(s==='screen-new-session')initNewSession();
 }
@@ -1377,6 +1476,7 @@ window.addEventListener('popstate', function(e){
     'screen-add-production-stock':  'screen-stock-home',
     'screen-opening-stock':         'screen-stock-home',
     'screen-contractor-report':     'screen-stock-home',
+    'screen-karigar-ledger':        'screen-stock-home',
     'screen-freight':                 'screen-home',
   };
   var dest = backMap[id];
@@ -1667,7 +1767,7 @@ function adminTab(tab,btn){
   document.getElementById('panel-merge').style.display=tab==='merge'?'':'none';
   var pb=document.getElementById('panel-backup');if(pb)pb.style.display=tab==='backup'?'':'none';
   if(tab==='users')renderAdminUsers();
-  if(tab==='skus')renderSKUs();
+  if(tab==='skus'){renderSKUs();renderProdCatReview();}
   if(tab==='destinations')renderDestinations();
   if(tab==='contractors'){renderContractors();renderLabourRates();}
   if(tab==='merge')initMergePanel();
@@ -1705,7 +1805,7 @@ function renderSKUs(){
       return `<div class="sku-row" style="${dis?'opacity:0.5;':''}">
         <div>
           <div style="font-size:14px;font-weight:600;">${sk.name}${dis?' <span style="font-size:11px;color:#e17055;font-weight:400;">[Disabled]</span>':''}</div>
-          <div style="font-size:12px;color:var(--text-secondary);">${sk.unit}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${sk.unit} &middot; ${prodCatBadge(skuProdCat(sk))}</div>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
           <button class="btn btn-sm" style="background:#2d6a9f;color:#fff;" onclick="editSKU(${sk.id})">Edit</button>
@@ -1716,6 +1816,85 @@ function renderSKUs(){
     }).join('')
     :'<div style="font-size:13px;color:var(--text-secondary);">No SKUs yet.</div>';
 }
+var _pcrOpen=false, _pcrFilter='unset';
+function toggleProdCatReview(){
+  _pcrOpen=!_pcrOpen;
+  document.getElementById('pcr-body').style.display=_pcrOpen?'':'none';
+  document.getElementById('pcr-toggle').textContent=_pcrOpen?'Hide':'Review all';
+  if(_pcrOpen) renderProdCatReview();
+}
+function setPcrFilter(f){ _pcrFilter=f; renderProdCatReview(); }
+
+// Fills every unset SKU with the name-based guess in one go. Only touches SKUs that
+// have no category yet, so it can never overwrite a decision already made.
+function applyProdCatGuesses(){
+  var skus=loadSKUs(), n=0;
+  skus.forEach(function(sk){
+    if(skuProdCat(sk))return;
+    var g=guessProdCat(sk.name);
+    if(g){ sk.prodCat=g; n++; }
+  });
+  if(!n){ alert('Nothing to fill — every SKU either has a category already, or its name gives no clue.'); return; }
+  showModal('Apply Suggestions',
+    'Set a category on '+n+' SKU'+(n===1?'':'s')+' from their names?\n\n'+
+    'Only SKUs with no category are touched. Review them afterwards and correct any that are wrong.',
+    function(){ saveSKUs(skus); closeModal(); renderSKUs(); renderProdCatReview(); });
+}
+
+function renderProdCatReview(){
+  var sum=document.getElementById('pcr-summary'); if(!sum)return;
+  var skus=loadSKUs().filter(function(s){return !s.disabled;});
+  var nk=skus.filter(function(s){return skuProdCat(s)==='namkeen';}).length;
+  var sn=skus.filter(function(s){return skuProdCat(s)==='snacks';}).length;
+  var un=skus.filter(function(s){return !skuProdCat(s);}).length;
+  var pct=skus.length?Math.round((skus.length-un)/skus.length*100):0;
+  sum.innerHTML='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;">'+
+    '<span><b>'+nk+'</b> namkeen</span><span><b>'+sn+'</b> snacks</span>'+
+    '<span style="color:'+(un?'var(--red)':'var(--green)')+';"><b>'+un+'</b> not set</span>'+
+    '<span style="color:var(--text-secondary);">'+pct+'% categorised</span></div>';
+
+  var body=document.getElementById('pcr-body'); if(!body||!_pcrOpen)return;
+  var list=skus.filter(function(s){
+    if(_pcrFilter==='unset')   return !skuProdCat(s);
+    if(_pcrFilter==='namkeen') return skuProdCat(s)==='namkeen';
+    if(_pcrFilter==='snacks')  return skuProdCat(s)==='snacks';
+    return true;
+  }).sort(function(a,b){return a.name.localeCompare(b.name);});
+
+  var tab=function(k,l,n){
+    return '<button class="btn btn-sm '+(_pcrFilter===k?'btn-primary':'btn-secondary')+'" '+
+      'onclick="setPcrFilter(\''+k+'\')">'+l+' ('+n+')</button>';
+  };
+  var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">'+
+    tab('unset','Not set',un)+tab('namkeen','Namkeen',nk)+tab('snacks','Snacks',sn)+
+    tab('all','All',skus.length)+
+    (un?'<button class="btn btn-sm" style="background:var(--amber,#e8a33d);color:#fff;margin-left:auto;" '+
+        'onclick="applyProdCatGuesses()">✨ Fill '+un+' from names</button>':'')+'</div>';
+
+  if(!list.length){
+    h+='<div style="font-size:13px;color:var(--text-secondary);padding:10px 0;">Nothing here.</div>';
+    body.innerHTML=h; return;
+  }
+  h+='<div style="max-height:420px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px 8px;">';
+  list.forEach(function(sk){
+    var cur=skuProdCat(sk), g=guessProdCat(sk.name);
+    var btn=function(v,l){
+      var on=cur===v;
+      return '<button class="btn btn-sm" style="'+(on
+        ?'background:'+(v==='namkeen'?'#27ae60':'#2d6a9f')+';color:#fff;'
+        :'background:var(--bg-secondary);color:var(--text-secondary);')+'" '+
+        'onclick="setProdCat('+sk.id+',\''+(on?'':v)+'\')">'+l+'</button>';
+    };
+    h+='<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border);">'+
+      '<div style="flex:1;min-width:0;font-size:13px;">'+sk.name+
+        '<div style="font-size:10px;color:var(--text-secondary);">'+sk.unit+
+        (!cur&&g?' &middot; looks like <b>'+g+'</b>':'')+'</div></div>'+
+      btn('namkeen','Namkeen')+btn('snacks','Snacks')+'</div>';
+  });
+  h+='</div>';
+  body.innerHTML=h;
+}
+
 function addSKU(){
   const name=document.getElementById('new-sku-name').value.trim(),unit=document.getElementById('new-sku-unit').value.trim();
   if(!name){alert('Please enter a SKU name.');return;}
@@ -2329,7 +2508,9 @@ const SK={
   OPENING:'ms_opening',
   CONTRACTORS:'ms_contractors',
   LABOUR_RATES:'ms_labour_rates',
-  CONTRACTOR_PAYMENTS:'ms_contractor_payments'
+  CONTRACTOR_PAYMENTS:'ms_contractor_payments',
+  WIP:'ms_wip_readings',
+  KARIGAR_PAYMENTS:'ms_karigar_payments'
 };
 
 var stockViewDate=new Date().toISOString().split('T')[0];
@@ -2356,6 +2537,18 @@ function saveLabourRates(r){
   else addPQ('labour_rates','labour_rates');
 }
 function loadContractorPayments(){return LS(SK.CONTRACTOR_PAYMENTS)||[];}
+function loadWipReadings(){return LS(SK.WIP)||[];}
+function saveWipReadings(w){
+  SS(SK.WIP,w);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveWipReadings)window._fb.saveWipReadings(w);
+  else addPQ('wip_readings','wip_readings');
+}
+function loadKarigarPayments(){return LS(SK.KARIGAR_PAYMENTS)||[];}
+function saveKarigarPayments(p){
+  SS(SK.KARIGAR_PAYMENTS,p);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveKarigarPayments)window._fb.saveKarigarPayments(p);
+  else addPQ('karigar_payments','karigar_payments');
+}
 function saveContractorPayments(p){
   SS(SK.CONTRACTOR_PAYMENTS,p);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveContractorPayments)window._fb.saveContractorPayments(p);
@@ -2380,6 +2573,10 @@ function resolveLabourRate(contractorId, skuId, onDate){
 }
 
 function loadContractors(){return LS(SK.CONTRACTORS)||[];}
+// Contractors created before the type field existed were all packing contractors.
+function contractorType(c){ return (c && c.ctype) || 'packing'; }
+function isKarigar(c){ return contractorType(c)==='production'; }
+function karigarContractors(){ return loadContractors().filter(isKarigar); }
 function saveContractors(c){
   SS(SK.CONTRACTORS,c);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveContractors)window._fb.saveContractors(c);
@@ -2695,11 +2892,13 @@ function renderStockDashboard(){
         '<button class="btn btn-primary no-print" style="flex:1;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production</button>'+
         '<button class="btn btn-secondary no-print" style="flex:1;" onclick="goTo(\'screen-opening-stock\')">📋 Set Opening</button>'+
       '</div>'+
-      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>'+
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-karigar-ledger\')">👨‍🍳 Namkeen Karigar Ledger</button>';
   } else if(aa&&isAccounts()){
     aa.innerHTML=
       '<button class="btn btn-primary no-print" style="width:100%;margin-bottom:8px;" onclick="goTo(\'screen-add-production-stock\')">+ Add Production Entry (Today)</button>'+
-      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>';
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-contractor-report\')">📊 Contractor Production Report</button>'+
+      '<button class="btn btn-secondary no-print" style="width:100%;margin-bottom:12px;" onclick="goTo(\'screen-karigar-ledger\')">👨‍🍳 Namkeen Karigar Ledger</button>';
   } else if(aa){aa.innerHTML='';}
 }
 
@@ -3865,10 +4064,280 @@ function renderContractors(){
   var el=document.getElementById('contractors-list');if(!el)return;
   el.innerHTML=contractors.length?contractors.map(function(c){
     return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:0.5px solid var(--border);">'+
-      '<div><div style="font-size:14px;font-weight:600;">'+c.name+'</div>'+(c.phone?'<div style="font-size:12px;color:var(--text-secondary);">📞 '+c.phone+'</div>':'')+
+      '<div><div style="font-size:14px;font-weight:600;">'+c.name+' '+
+        (isKarigar(c)?'<span class="badge badge-done" style="font-size:10px;">Karigar &middot; per kg</span>'
+                     :'<span class="badge" style="font-size:10px;background:#e8f0fb;color:#2d6a9f;">Packing &middot; per unit</span>')+
+      '</div>'+(c.phone?'<div style="font-size:12px;color:var(--text-secondary);">📞 '+c.phone+'</div>':'')+
       '</div><button class="icon-btn del" onclick="deleteContractor(\''+c.id+'\')">🗑️</button></div>';
   }).join(''):'<div style="font-size:13px;color:var(--text-secondary);">No contractors added yet.</div>';
 }
+// ══════════════════════════════════════════════════════════════
+// NAMKEEN KARIGAR LEDGER
+// ══════════════════════════════════════════════════════════════
+// Karigars are paid per kg of namkeen MADE. We can only observe what was PACKED, so:
+//
+//   made = packed − opening WIP + closing WIP
+//
+// Without the WIP adjustment, a month that builds work-in-progress underpays them and
+// makes that month's labour cost read artificially low; a month that draws WIP down does
+// the reverse. Over a quarter it washes out, but no single month would be trustworthy.
+// WIP is optional — the ledger works without it and simply shows the packed figure.
+
+function initKarigarLedger(){
+  var sel=document.getElementById('kl-contractor');
+  var list=karigarContractors();
+  sel.innerHTML=list.length
+    ? list.map(function(c){return '<option value="'+c.id+'">'+c.name+'</option>';}).join('')
+    : '<option value="">No karigar team set up</option>';
+  var n=new Date();
+  if(!document.getElementById('kl-from').value)
+    document.getElementById('kl-from').value=new Date(n.getFullYear(),n.getMonth(),1).toISOString().split('T')[0];
+  if(!document.getElementById('kl-to').value)
+    document.getElementById('kl-to').value=n.toISOString().split('T')[0];
+  if(!document.getElementById('wip-date').value)
+    document.getElementById('wip-date').value=n.toISOString().split('T')[0];
+  renderWipList();
+  renderKarigarLedger();
+}
+
+// The WIP reading in force on a date = the latest one recorded on or before it.
+function wipAsOf(dateStr){
+  var w=loadWipReadings().filter(function(x){return x.date<=dateStr;})
+        .sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  return w.length?w[0]:null;
+}
+
+// Namkeen kg packed in a period, priced at the rate in force on each production date.
+function computeKarigarLedger(cid,from,to){
+  var skus=loadSKUsLocal(), byId={};
+  skus.forEach(function(s){byId[s.id]=s;});
+  var entries=loadProdEntries().filter(function(e){
+    return e.date>=from && e.date<=to;
+  });
+  var packedKg=0, amount=0, rates=[], unpricedKg=0, uncatKg=0, uncat={};
+  entries.forEach(function(e){
+    (e.items||[]).forEach(function(it){
+      var q=parseFloat(it.qty)||0; if(!q)return;
+      var sk=byId[it.skuId]; if(!sk)return;
+      var w=parseFloat(it.wKg)||0;
+      if(!w) w=parseFloat(sk.weightPerUnitKg)||0;
+      if(!w) return;                                   // no weight — counted in the coverage warning
+      var cat=skuProdCat(sk);
+      if(cat!=='namkeen'){
+        if(!cat){ uncatKg+=q*w; uncat[sk.name]=(uncat[sk.name]||0)+q*w; }
+        return;                                        // snacks and uncategorised are excluded
+      }
+      var kgv=q*w;
+      packedKg+=kgv;
+      var r=resolveLabourRate(cid,null,e.date);
+      if(r){ amount+=kgv*r.rate; if(rates.indexOf(r.rate)<0)rates.push(r.rate); }
+      else unpricedKg+=kgv;
+    });
+  });
+
+  // WIP adjustment — opening is the reading in force the day BEFORE the period starts
+  var d=new Date(from); d.setDate(d.getDate()-1);
+  var openW=wipAsOf(d.toISOString().split('T')[0]);
+  var closeW=wipAsOf(to);
+  var opening=openW?(parseFloat(openW.kg)||0):0;
+  var closing=closeW?(parseFloat(closeW.kg)||0):0;
+  var hasWip=!!(openW||closeW);
+  var madeKg=packedKg-opening+closing;
+
+  // Recompute the amount on the adjusted tonnage using the period's prevailing rate
+  var prevail=resolveLabourRate(cid,null,to);
+  var rate=prevail?prevail.rate:(rates.length?rates[0]:0);
+  var due=hasWip ? madeKg*rate : amount;
+
+  var paid=loadKarigarPayments().filter(function(p){
+    return p.contractorId===cid && p.date>=from && p.date<=to;
+  });
+  var paidAmt=paid.reduce(function(s,p){return s+(parseFloat(p.amount)||0);},0);
+
+  return {cid:cid,from:from,to:to,entries:entries.length,
+    packedKg:packedKg,opening:opening,closing:closing,hasWip:hasWip,openW:openW,closeW:closeW,
+    madeKg:madeKg,rate:rate,rates:rates,due:due,unpricedKg:unpricedKg,
+    uncatKg:uncatKg,uncat:uncat,payments:paid,paidAmt:paidAmt,balance:due-paidAmt};
+}
+
+function renderKarigarLedger(){
+  var out=document.getElementById('kl-output'); if(!out)return;
+  var cid=(document.getElementById('kl-contractor')||{}).value;
+  if(!cid){
+    out.innerHTML='<div class="card"><div style="font-size:13px;color:var(--text-secondary);line-height:1.7;">'+
+      'No karigar team set up yet.<br><br>Add one under <b>Admin → Contractors</b>, choosing '+
+      '<b>"Production (karigar) — rate per kg"</b>, then set their rate.</div></div>';
+    return;
+  }
+  var from=document.getElementById('kl-from').value, to=document.getElementById('kl-to').value;
+  if(!from||!to){out.innerHTML='';return;}
+  if(from>to){out.innerHTML='<div class="card"><div style="font-size:13px;color:var(--red);">"From" is after "To".</div></div>';return;}
+
+  var L=computeKarigarLedger(cid,from,to);
+  var name=(loadContractors().find(function(x){return x.id===cid;})||{}).name||'';
+  var inr=function(n){return '₹'+Math.round(n).toLocaleString('en-IN');};
+  var kgf=function(n){return (Math.round(n*10)/10).toLocaleString('en-IN')+' kg';};
+  var row=function(l,v,big,col){
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:'+(big?'9px 0':'5px 0')+';'+
+      (big?'border-top:1px solid var(--border);margin-top:4px;':'')+'">'+
+      '<span style="font-size:'+(big?'13px':'12px')+';'+(big?'font-weight:700;':'color:var(--text-secondary);')+'">'+l+'</span>'+
+      '<span style="font-size:'+(big?'14px':'12px')+';font-weight:'+(big?'800':'600')+';'+(col?'color:'+col+';':'')+'">'+v+'</span></div>';
+  };
+
+  var h='<div class="card"><div style="font-size:15px;font-weight:700;">'+name+'</div>'+
+    '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">'+
+    fmtDMY(from)+' → '+fmtDMY(to)+' · '+L.entries+' production entr'+(L.entries===1?'y':'ies')+'</div>';
+
+  h+=row('Namkeen packed',kgf(L.packedKg));
+  if(L.hasWip){
+    h+=row('Less: opening WIP'+(L.openW?' ('+fmtDMY(L.openW.date)+')':''),'− '+kgf(L.opening));
+    h+=row('Add: closing WIP'+(L.closeW?' ('+fmtDMY(L.closeW.date)+')':''),'+ '+kgf(L.closing));
+    h+=row('Namkeen made',kgf(L.madeKg),true);
+  }
+  h+=row('Rate per kg',L.rate?('₹'+L.rate):'<span style="color:var(--red);">not set</span>');
+  h+=row('Payment due',inr(L.due),true);
+  h+=row('Less: payments given','− '+inr(L.paidAmt));
+  h+=row('Balance',inr(L.balance),true,(L.balance>0?'var(--red)':'var(--green)'));
+
+  if(!L.hasWip){
+    h+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:6px;padding:7px 10px;'+
+       'font-size:11px;color:#8a6d00;margin-top:10px;">No WIP readings yet — this is packed weight only. '+
+       'Record the unpacked namkeen on hand below and the adjustment appears from the second reading onward.</div>';
+  }
+  if(L.unpricedKg>0){
+    h+='<div style="font-size:11px;color:var(--red);margin-top:8px;">⚠ '+kgf(L.unpricedKg)+
+       ' had no rate in force on its production date and was left out of the amount.</div>';
+  }
+  if(L.uncatKg>0){
+    var names=Object.keys(L.uncat).sort(function(a,b){return L.uncat[b]-L.uncat[a];}).slice(0,4);
+    h+='<div style="font-size:11px;color:#8a6d00;margin-top:8px;">⚠ '+kgf(L.uncatKg)+
+       ' produced by SKUs with no category set, so excluded: '+names.join(', ')+
+       (Object.keys(L.uncat).length>4?' and more':'')+'. Set them under Admin → SKUs.</div>';
+  }
+  h+='</div>';
+
+  // payments
+  h+='<div class="card no-print"><div style="font-size:13px;font-weight:700;margin-bottom:8px;">Record a payment</div>'+
+    '<div class="inline-row" style="margin-bottom:0;">'+
+    '<div><div class="field-label">Date</div><input type="date" id="kp-date" value="'+to+'"></div>'+
+    '<div><div class="field-label">Amount ₹</div><input type="number" id="kp-amt" min="0" step="0.01" placeholder="0"></div></div>'+
+    '<input type="text" id="kp-notes" placeholder="Notes (optional)" style="margin-top:8px;">'+
+    '<button class="btn btn-success" style="margin-top:10px;" onclick="saveKarigarPayment()">Save payment</button>';
+  if(L.payments.length){
+    h+='<div style="margin-top:14px;font-size:12px;font-weight:700;">Payments in this period</div>';
+    L.payments.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).forEach(function(p){
+      h+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:0.5px solid var(--border);">'+
+        '<div style="font-size:12px;"><b>'+inr(p.amount)+'</b><div style="font-size:10px;color:var(--text-secondary);">'+
+        fmtDMY(p.date)+(p.notes?' · '+p.notes:'')+'</div></div>'+
+        '<button class="icon-btn del" onclick="deleteKarigarPayment(\''+p.id+'\')">🗑️</button></div>';
+    });
+  }
+  h+='</div>';
+  out.innerHTML=h;
+}
+
+function saveWipEntry(){
+  var date=document.getElementById('wip-date').value;
+  var kg=parseFloat(document.getElementById('wip-kg').value);
+  var notes=document.getElementById('wip-notes').value.trim();
+  if(!date){alert('Pick the date this was measured.');return;}
+  if(isNaN(kg)||kg<0){alert('Enter the unpacked namkeen on hand, in kg.');return;}
+  var w=loadWipReadings();
+  var existing=w.find(function(x){return x.date===date;});
+  if(existing){
+    if(!confirm('A WIP reading already exists for '+fmtDMY(date)+' ('+existing.kg+' kg). Replace it?'))return;
+    existing.kg=kg; existing.notes=notes; existing.updatedBy=CU.username; existing.updatedAt=new Date().toISOString();
+  }else{
+    w.push({id:'W'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
+      date:date,kg:kg,notes:notes,createdBy:CU.username,createdAt:new Date().toISOString()});
+  }
+  saveWipReadings(w);
+  document.getElementById('wip-kg').value='';
+  document.getElementById('wip-notes').value='';
+  renderWipList(); renderKarigarLedger();
+}
+function renderWipList(){
+  var el=document.getElementById('wip-list'); if(!el)return;
+  var w=loadWipReadings().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');}).slice(0,8);
+  if(!w.length){el.innerHTML='<div style="font-size:12px;color:var(--text-secondary);">No readings yet.</div>';return;}
+  el.innerHTML=w.map(function(x){
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--border);">'+
+      '<div style="font-size:12px;">'+fmtDMY(x.date)+' — <b>'+x.kg+' kg</b>'+
+      (x.notes?'<div style="font-size:10px;color:var(--text-secondary);">'+x.notes+'</div>':'')+'</div>'+
+      '<button class="icon-btn del" onclick="deleteWipEntry(\''+x.id+'\')">🗑️</button></div>';
+  }).join('');
+}
+function deleteWipEntry(id){
+  showModal('Remove WIP Reading','Remove this reading? Ledgers covering it will recalculate.',function(){
+    saveWipReadings(loadWipReadings().filter(function(x){return x.id!==id;}));
+    closeModal(); renderWipList(); renderKarigarLedger();
+  });
+}
+function saveKarigarPayment(){
+  var cid=document.getElementById('kl-contractor').value;
+  var date=document.getElementById('kp-date').value;
+  var amt=parseFloat(document.getElementById('kp-amt').value);
+  var notes=document.getElementById('kp-notes').value.trim();
+  if(!cid){alert('Select a karigar team.');return;}
+  if(!date){alert('Pick the payment date.');return;}
+  if(isNaN(amt)||amt<=0){alert('Enter the amount paid.');return;}
+  var p=loadKarigarPayments();
+  p.push({id:'KP'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
+    contractorId:cid,date:date,amount:amt,notes:notes,
+    createdBy:CU.username,createdAt:new Date().toISOString()});
+  saveKarigarPayments(p);
+  renderKarigarLedger();
+}
+function deleteKarigarPayment(id){
+  showModal('Remove Payment','Remove this payment record?',function(){
+    saveKarigarPayments(loadKarigarPayments().filter(function(x){return x.id!==id;}));
+    closeModal(); renderKarigarLedger();
+  });
+}
+function printKarigarLedger(){
+  if(!isAdmin()){alert('Only admin can print.');return;}
+  var cid=document.getElementById('kl-contractor').value; if(!cid)return;
+  var from=document.getElementById('kl-from').value, to=document.getElementById('kl-to').value;
+  var L=computeKarigarLedger(cid,from,to);
+  var name=(loadContractors().find(function(x){return x.id===cid;})||{}).name||'';
+  var inr=function(n){return '&#8377;'+Math.round(n).toLocaleString('en-IN');};
+  var kgf=function(n){return (Math.round(n*10)/10).toLocaleString('en-IN')+' kg';};
+  var r=function(l,v,b){return '<tr'+(b?' style="font-weight:700;background:#f5f5f5;"':'')+'><td>'+l+'</td><td style="text-align:right;">'+v+'</td></tr>';};
+  var t='<table style="max-width:420px;">';
+  t+=r('Namkeen packed',kgf(L.packedKg));
+  if(L.hasWip){
+    t+=r('Less: opening WIP','&minus; '+kgf(L.opening));
+    t+=r('Add: closing WIP','+ '+kgf(L.closing));
+    t+=r('Namkeen made',kgf(L.madeKg),true);
+  }
+  t+=r('Rate per kg',L.rate?('&#8377;'+L.rate):'not set');
+  t+=r('Payment due',inr(L.due),true);
+  t+=r('Less: payments given','&minus; '+inr(L.paidAmt));
+  t+=r('BALANCE',inr(L.balance),true);
+  t+='</table>';
+  var pay=L.payments.length
+    ? '<h3>Payments</h3><table><thead><tr><th>Date</th><th style="text-align:right;">Amount</th><th>Notes</th></tr></thead><tbody>'+
+      L.payments.map(function(p){return '<tr><td>'+p.date+'</td><td style="text-align:right;">'+inr(p.amount)+'</td><td>'+(p.notes||'')+'</td></tr>';}).join('')+
+      '</tbody></table>'
+    : '';
+  var html='<!DOCTYPE html><html><head><meta charset="utf-8"><title>Karigar Ledger - '+name+'</title>'+
+    '<style>@page{margin:1.2cm;}body{font-family:Arial,sans-serif;font-size:12px;color:#222;}'+
+    'h2{margin:0 0 2px;font-size:16px;}h3{font-size:13px;margin:16px 0 6px;}'+
+    '.sub{font-size:11px;color:#666;margin-bottom:12px;}'+
+    'table{width:100%;border-collapse:collapse;margin-bottom:12px;}'+
+    'th{background:#f0f0f0;font-size:10px;text-transform:uppercase;padding:6px 8px;text-align:left;border-bottom:2px solid #ccc;}'+
+    'td{padding:5px 8px;border-bottom:1px solid #eee;}'+
+    '.sign{margin-top:34px;display:flex;justify-content:space-between;font-size:11px;color:#555;}'+
+    '.sign div{border-top:1px solid #999;padding-top:4px;width:200px;text-align:center;}</style></head><body>'+
+    '<h2>Maruti Namkeen &#8212; Karigar Settlement</h2>'+
+    '<div class="sub">Team: <b>'+name+'</b> &nbsp;|&nbsp; '+fmtDMY(from)+' &rarr; '+fmtDMY(to)+'</div>'+
+    t+pay+
+    '<div class="sign"><div>Karigar</div><div>For Maruti Namkeen</div></div></body></html>';
+  var iframe=document.getElementById('print-iframe');
+  iframe.srcdoc=html;
+  iframe.onload=function(){try{iframe.contentWindow.focus();iframe.contentWindow.print();}catch(e){alert('Print failed.');}};
+}
+
 // ── Production rate management ──────────────────────────────────
 // Two distinct actions: "Add / Change" writes a NEW dated row so history survives,
 // while "Correct" edits a row in place and exists only for genuine typos.
@@ -3934,7 +4403,10 @@ function openAddRate(){
   if(!cid){alert('Add a contractor first.');return;}
   editingRateId=null;
   var contractor=loadContractors().find(function(x){return x.id===cid;});
-  document.getElementById('rate-modal-title').textContent='Set Rates — '+(contractor?contractor.name:'');
+  var _kar=contractor&&isKarigar(contractor);
+  document.getElementById('rate-modal-title').textContent=(_kar?'Set Karigar Rate — ':'Set Rates — ')+(contractor?contractor.name:'');
+  var _dl=document.getElementById('rm-default-label');
+  if(_dl) _dl.textContent=_kar?'Rate per kg of namkeen made':'Default rate — applies to any SKU without its own rate';
   document.getElementById('rate-modal-msg').textContent='Rates you change are saved as new dated rows. Earlier rates are kept, so past settlements still recalculate at what was actually paid.';
   document.getElementById('rm-from').value=new Date().toISOString().split('T')[0];
   document.getElementById('rm-search').value='';
@@ -3947,6 +4419,10 @@ function openAddRate(){
 // pre-filled; the inherited default shows as placeholder so blank clearly means
 // "follows the default" rather than "zero".
 function buildRateGrid(cid){
+  // A karigar is paid a flat rate per kg of namkeen made — there is no per-SKU dimension,
+  // so the SKU grid is replaced by a single rate box.
+  var _c=loadContractors().find(function(x){return x.id===cid;});
+  if(_c && isKarigar(_c)){ buildKarigarRate(cid); return; }
   var onDate=document.getElementById('rm-from').value||new Date().toISOString().split('T')[0];
   var def=resolveLabourRate(cid,null,onDate);
   var dEl=document.getElementById('rm-default');
@@ -3981,6 +4457,20 @@ function onRateDateChange(){
   if(editingRateId)return;
   var sel=document.getElementById('lr-contractor');
   if(sel&&sel.value)buildRateGrid(sel.value);
+}
+
+function buildKarigarRate(cid){
+  var onDate=document.getElementById('rm-from').value||new Date().toISOString().split('T')[0];
+  var def=resolveLabourRate(cid,null,onDate);
+  document.getElementById('rm-default').value = def ? def.rate : '';
+  document.getElementById('rm-default-cur').textContent = def
+    ? 'Currently ₹'+def.rate+' per kg, effective from '+def.effectiveFrom
+    : 'No rate set yet.';
+  document.getElementById('rm-grid').innerHTML=
+    '<div style="font-size:12px;color:var(--text-secondary);padding:12px 4px;line-height:1.6;">'+
+    'Karigars are paid a flat rate per kg of <b>namkeen</b> made, so there are no per-SKU rates. '+
+    'Enter the rate in the box above.<br><br>'+
+    'Only SKUs marked <b>Namkeen</b> under Admin → SKUs count towards their tonnage.</div>';
 }
 
 function filterRateGrid(){
@@ -4032,6 +4522,9 @@ function saveLabourRate(){
     saveLabourRates(rates); closeRateModal(); renderLabourRates(); return;
   }
 
+  var _ct=loadContractors().find(function(x){return x.id===cid;});
+  var _isKar=_ct&&isKarigar(_ct);
+
   // ── Bulk path: write a new dated row only where the value actually changed ──
   var mk=function(skuId,rate){
     return {id:'LR'+Date.now()+'_'+Math.random().toString(36).substr(2,5),
@@ -4054,7 +4547,7 @@ function saveLabourRate(){
   }
 
   var bad=null;
-  activeSKUs().forEach(function(s){
+  (_isKar?[]:activeSKUs()).forEach(function(s){
     var el=document.getElementById('rmg-'+s.id);
     if(!el||el.value==='')return;
     var n=parseFloat(el.value);
@@ -4088,7 +4581,8 @@ function addContractor(){
   if(!name){alert('Please enter contractor name.');return;}
   var contractors=loadContractors();
   if(contractors.find(function(c){return c.name.toLowerCase()===name.toLowerCase();})){alert('"'+name+'" already exists.');return;}
-  contractors.push({id:'C'+Date.now(),name:name,phone:phone});
+  var ctype=(document.getElementById('new-contractor-type')||{}).value||'packing';
+  contractors.push({id:'C'+Date.now(),name:name,phone:phone,ctype:ctype});
   saveContractors(contractors);
   document.getElementById('new-contractor-name').value='';
   document.getElementById('new-contractor-phone').value='';
@@ -4136,6 +4630,8 @@ async function _bkReadAll(){
   var contractorsDoc=await getDoc('stock_config','contractors');
   var openingDoc=await getDoc('stock_config','opening');
   var labourRatesDoc=await getDoc('stock_config','labour_rates');
+  var wipDoc=await getDoc('stock_config','wip_readings');
+  var karigarPayDoc=await getDoc('stock_config','karigar_payments');
   var contractorPaymentsDoc=await getDoc('stock_config','contractor_payments');
   return {
     meta:{version:'1.0',app:'Maruti Loading',exportedAt:new Date().toISOString(),
@@ -4145,7 +4641,8 @@ async function _bkReadAll(){
     freight_entries:freightEntries, freight_payments:freightPayments,
     config_users:usersDoc, config_skus:skusDoc, config_destinations:destDoc,
     stock_contractors:contractorsDoc, stock_opening:openingDoc,
-    stock_labour_rates:labourRatesDoc, stock_contractor_payments:contractorPaymentsDoc
+    stock_labour_rates:labourRatesDoc, stock_contractor_payments:contractorPaymentsDoc,
+    stock_wip_readings:wipDoc, stock_karigar_payments:karigarPayDoc
   };
 }
 
@@ -4201,6 +4698,8 @@ async function doLoadingBackup(){
       zip.file('prod_entries.csv',_bkCSV(data.prod_entries));
       zip.file('contractors.csv',_bkCSV((data.stock_contractors&&data.stock_contractors.list)||[]));
       zip.file('labour_rates.csv',_bkCSV((data.stock_labour_rates&&data.stock_labour_rates.list)||[]));
+      zip.file('wip_readings.csv',_bkCSV((data.stock_wip_readings&&data.stock_wip_readings.list)||[]));
+      zip.file('karigar_payments.csv',_bkCSV((data.stock_karigar_payments&&data.stock_karigar_payments.list)||[]));
       zip.file('contractor_payments.csv',_bkCSV((data.stock_contractor_payments&&data.stock_contractor_payments.list)||[]));
       zip.file('skus.csv',_bkCSV((data.config_skus&&data.config_skus.list)||[]));
       zip.file('destinations.csv',_bkCSV((data.config_destinations&&data.config_destinations.list)||[]));
@@ -4304,6 +4803,8 @@ async function doLoadingRestore(mode){
       if(data.stock_contractors)await db.collection('stock_config').doc('contractors').set(data.stock_contractors);
       if(data.stock_opening)await db.collection('stock_config').doc('opening').set(data.stock_opening);
       if(data.stock_labour_rates)await db.collection('stock_config').doc('labour_rates').set(data.stock_labour_rates);
+      if(data.stock_wip_readings)await db.collection('stock_config').doc('wip_readings').set(data.stock_wip_readings);
+      if(data.stock_karigar_payments)await db.collection('stock_config').doc('karigar_payments').set(data.stock_karigar_payments);
       if(data.stock_contractor_payments)await db.collection('stock_config').doc('contractor_payments').set(data.stock_contractor_payments);
     }
     _bkMsg('✅ Restore complete: '+written+' written, '+skipped+' skipped. Reloading…','success');
@@ -5139,7 +5640,8 @@ function selectPendingSession(idx){
     // masters
     'addContractor','addSKU','editSKU','toggleSKU',
     'addDestination','editDestination','toggleDestination','deleteDestination',
-    'addUser','saveEditUser'
+    'addUser','saveEditUser',
+    'saveWipEntry','saveKarigarPayment'
   ];
   // NOT guarded on purpose:
   //  • saveSKUs / saveUsers / saveSessions / saveProdEntries / saveDestinations /
