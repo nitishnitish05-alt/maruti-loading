@@ -967,6 +967,8 @@ try {
     async saveWipReadings(w){try{await _db.collection("stock_config").doc("wip_readings").set({list:w});return true;}catch(e){return false;}},
     async loadWipReadings(){try{const sn=await _db.collection("stock_config").doc("wip_readings").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveKarigarPayments(p){try{await _db.collection("stock_config").doc("karigar_payments").set({list:p});return true;}catch(e){return false;}},
+    async saveFreightSettlements(s){try{await _db.collection("stock_config").doc("freight_settlements").set({list:s});return true;}catch(e){return false;}},
+    async loadFreightSettlements(){try{const sn=await _db.collection("stock_config").doc("freight_settlements").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async loadKarigarPayments(){try{const sn=await _db.collection("stock_config").doc("karigar_payments").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async loadLabourRates(){try{const sn=await _db.collection("stock_config").doc("labour_rates").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
     async saveContractorPayments(p){try{await _db.collection("stock_config").doc("contractor_payments").set({list:p});return true;}catch(e){return false;}},
@@ -1041,6 +1043,7 @@ async function syncQueue(){
       else if(item.type==='labour_rates'&&window._fb.saveLabourRates){const ok=await window._fb.saveLabourRates(loadLabourRates());if(ok)delPQ('labour_rates','labour_rates');else fail++;}
       else if(item.type==='wip_readings'&&window._fb.saveWipReadings){const ok=await window._fb.saveWipReadings(loadWipReadings());if(ok)delPQ('wip_readings','wip_readings');else fail++;}
       else if(item.type==='karigar_payments'&&window._fb.saveKarigarPayments){const ok=await window._fb.saveKarigarPayments(loadKarigarPayments());if(ok)delPQ('karigar_payments','karigar_payments');else fail++;}
+      else if(item.type==='freight_settlements'&&window._fb.saveFreightSettlements){const ok=await window._fb.saveFreightSettlements(loadFreightSettlements());if(ok)delPQ('freight_settlements','freight_settlements');else fail++;}
       else if(item.type==='contractor_payments'&&window._fb.saveContractorPayments){const ok=await window._fb.saveContractorPayments(loadContractorPayments());if(ok)delPQ('contractor_payments','contractor_payments');else fail++;}
       else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
       else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
@@ -1090,6 +1093,9 @@ async function pullCloud(){
     }
     if(window._fb.loadKarigarPayments){
       const ckp=await window._fb.loadKarigarPayments();if(ckp)SS(SK.KARIGAR_PAYMENTS,ckp);
+    }
+    if(window._fb.loadFreightSettlements){
+      const cfs=await window._fb.loadFreightSettlements();if(cfs)SS(SK.FREIGHT_SETTLEMENTS,cfs);
     }
     if(window._fb.loadContractorPayments){
       const ccp=await window._fb.loadContractorPayments();if(ccp)SS(SK.CONTRACTOR_PAYMENTS,ccp);
@@ -2510,7 +2516,8 @@ const SK={
   LABOUR_RATES:'ms_labour_rates',
   CONTRACTOR_PAYMENTS:'ms_contractor_payments',
   WIP:'ms_wip_readings',
-  KARIGAR_PAYMENTS:'ms_karigar_payments'
+  KARIGAR_PAYMENTS:'ms_karigar_payments',
+  FREIGHT_SETTLEMENTS:'ms_freight_settlements'
 };
 
 var stockViewDate=new Date().toISOString().split('T')[0];
@@ -2544,6 +2551,26 @@ function saveWipReadings(w){
   else addPQ('wip_readings','wip_readings');
 }
 function loadKarigarPayments(){return LS(SK.KARIGAR_PAYMENTS)||[];}
+function loadFreightSettlements(){return LS(SK.FREIGHT_SETTLEMENTS)||[];}
+function saveFreightSettlements(s){
+  SS(SK.FREIGHT_SETTLEMENTS,s);
+  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightSettlements)window._fb.saveFreightSettlements(s);
+  else addPQ('freight_settlements','freight_settlements');
+}
+// The most recent settlement for a truck — what the accountant needs to see first.
+function lastFreightSettlement(truck){
+  var s=loadFreightSettlements().filter(function(x){return x.truckNo===truck;})
+    .sort(function(a,b){return (b.freightTo||'').localeCompare(a.freightTo||'');});
+  return s.length?s[0]:null;
+}
+// Is this trip/payment date inside a period already signed off?
+function freightDateSettled(truck,dateStr,which){
+  return loadFreightSettlements().some(function(s){
+    if(s.truckNo!==truck)return false;
+    if(which==='pay') return s.payTo && dateStr<=s.payTo && dateStr>=(s.freightFrom||'0000-00-00');
+    return s.freightTo && dateStr<=s.freightTo && dateStr>=(s.freightFrom||'0000-00-00');
+  });
+}
 function saveKarigarPayments(p){
   SS(SK.KARIGAR_PAYMENTS,p);
   if(fbOK&&isOnline&&window._fb&&window._fb.saveKarigarPayments)window._fb.saveKarigarPayments(p);
@@ -4632,6 +4659,7 @@ async function _bkReadAll(){
   var labourRatesDoc=await getDoc('stock_config','labour_rates');
   var wipDoc=await getDoc('stock_config','wip_readings');
   var karigarPayDoc=await getDoc('stock_config','karigar_payments');
+  var freightSetDoc=await getDoc('stock_config','freight_settlements');
   var contractorPaymentsDoc=await getDoc('stock_config','contractor_payments');
   return {
     meta:{version:'1.0',app:'Maruti Loading',exportedAt:new Date().toISOString(),
@@ -4642,7 +4670,8 @@ async function _bkReadAll(){
     config_users:usersDoc, config_skus:skusDoc, config_destinations:destDoc,
     stock_contractors:contractorsDoc, stock_opening:openingDoc,
     stock_labour_rates:labourRatesDoc, stock_contractor_payments:contractorPaymentsDoc,
-    stock_wip_readings:wipDoc, stock_karigar_payments:karigarPayDoc
+    stock_wip_readings:wipDoc, stock_karigar_payments:karigarPayDoc,
+    stock_freight_settlements:freightSetDoc
   };
 }
 
@@ -4700,6 +4729,7 @@ async function doLoadingBackup(){
       zip.file('labour_rates.csv',_bkCSV((data.stock_labour_rates&&data.stock_labour_rates.list)||[]));
       zip.file('wip_readings.csv',_bkCSV((data.stock_wip_readings&&data.stock_wip_readings.list)||[]));
       zip.file('karigar_payments.csv',_bkCSV((data.stock_karigar_payments&&data.stock_karigar_payments.list)||[]));
+      zip.file('freight_settlements.csv',_bkCSV((data.stock_freight_settlements&&data.stock_freight_settlements.list)||[]));
       zip.file('contractor_payments.csv',_bkCSV((data.stock_contractor_payments&&data.stock_contractor_payments.list)||[]));
       zip.file('skus.csv',_bkCSV((data.config_skus&&data.config_skus.list)||[]));
       zip.file('destinations.csv',_bkCSV((data.config_destinations&&data.config_destinations.list)||[]));
@@ -4805,6 +4835,7 @@ async function doLoadingRestore(mode){
       if(data.stock_labour_rates)await db.collection('stock_config').doc('labour_rates').set(data.stock_labour_rates);
       if(data.stock_wip_readings)await db.collection('stock_config').doc('wip_readings').set(data.stock_wip_readings);
       if(data.stock_karigar_payments)await db.collection('stock_config').doc('karigar_payments').set(data.stock_karigar_payments);
+      if(data.stock_freight_settlements)await db.collection('stock_config').doc('freight_settlements').set(data.stock_freight_settlements);
       if(data.stock_contractor_payments)await db.collection('stock_config').doc('contractor_payments').set(data.stock_contractor_payments);
     }
     _bkMsg('✅ Restore complete: '+written+' written, '+skipped+' skipped. Reloading…','success');
@@ -5265,6 +5296,69 @@ function fmtDMY(d){
   return p[2]+' '+(m[parseInt(p[1],10)-1]||p[1])+' '+p[0];
 }
 
+function _nextDayISO(d){
+  if(!d)return '';
+  var x=new Date(d); if(isNaN(x))return '';
+  x.setDate(x.getDate()+1);
+  return x.toISOString().split('T')[0];
+}
+
+// Driver accounts get settled a month or two after the fact, so the accountant needs a
+// record of exactly which trips and which payments were already signed off. Without it
+// they are relying on memory across a two-month gap.
+function markFreightSettled(){
+  if(!isAdmin()){alert('Only admin can settle a ledger.');return;}
+  var truck=window._ftTruck; if(!truck)return;
+  var from=(document.getElementById('fl-from-date')||{}).value||'';
+  var to=(document.getElementById('fl-asof-date')||{}).value||'';
+  var payTo=(document.getElementById('fl-payto-date')||{}).value||'';
+  if(!to){alert('Set the freight "To" date before settling — it records how far the settlement reaches.');return;}
+  var L=computeTruckLedger(truck,from,to,payTo);
+  var inr=function(n){return '₹'+Math.round(n).toLocaleString('en-IN');};
+
+  var prev=lastFreightSettlement(truck);
+  var warn='';
+  if(prev && prev.freightTo && from && from<=prev.freightTo){
+    warn='\n\n⚠ This overlaps the previous settlement, which already covered freight to '+
+         fmtDMY(prev.freightTo)+'. Those trips would be settled twice.';
+  }
+  if(prev && prev.freightTo && from && from>_nextDayISO(prev.freightTo)){
+    warn='\n\n⚠ This starts after '+fmtDMY(_nextDayISO(prev.freightTo))+
+         ', so trips between the two periods would be left unsettled.';
+  }
+
+  showModal('Settle this ledger',
+    truck+'\n\nFreight '+(from?fmtDMY(from)+' → ':'up to ')+fmtDMY(to)+
+    '\nPayments '+(L.payTo?'up to '+fmtDMY(L.payTo):'all')+
+    '\n\nGross balance '+inr(L.grossBalance)+
+    '\nPayments made '+inr(L.totalPaid)+
+    '\nClosing balance '+inr(L.closing)+
+    '\n\nThis records how far the account has been signed off. It does not change any figures.'+warn,
+    function(){
+      var list=loadFreightSettlements();
+      list.push({
+        id:'FS'+Date.now()+'_'+Math.random().toString(36).substr(2,4),
+        truckNo:truck,
+        freightFrom:from||'', freightTo:to, payTo:L.payTo||'',
+        opening:L.opening, grossBalance:L.grossBalance,
+        totalPaid:L.totalPaid, closing:L.closing,
+        settledBy:CU.username, settledAt:new Date().toISOString(), notes:''
+      });
+      saveFreightSettlements(list);
+      closeModal();
+      _renderTruckLedger();
+    });
+}
+
+function unsettleFreight(id){
+  showModal('Remove Settlement',
+    'Remove this settlement record?\n\nThe trips and payments it covered will show as unsettled again. No figures change.',
+    function(){
+      saveFreightSettlements(loadFreightSettlements().filter(function(x){return x.id!==id;}));
+      closeModal(); _renderTruckLedger();
+    });
+}
+
 function searchTruckLedger(){fetchFreshFreight(function(){_renderTruckLedger();});}
 function searchDateLedger(){fetchFreshFreight(function(){_renderDateLedger();});}
 
@@ -5299,7 +5393,24 @@ function _renderTruckLedger(){
   window._ftEntryIds=entries.map(function(e){return e.id;});
   window._ftPayIds=payments.map(function(p){return p.id;});
 
-  var html='<div class="freight-summary">';
+  var _last=lastFreightSettlement(truck);
+  var html='';
+  if(_last){
+    html+='<div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:10px 12px;margin-bottom:10px;">'+
+      '<div style="font-size:12px;font-weight:700;color:#1b5e20;">&#10003; Last settled &mdash; freight to '+fmtDMY(_last.freightTo)+
+        (_last.payTo?', payments to '+fmtDMY(_last.payTo):'')+'</div>'+
+      '<div style="font-size:11px;color:#2e7d32;margin-top:2px;">Balance was &#8377;'+
+        Math.round(_last.closing||0).toLocaleString('en-IN')+' &middot; settled by '+(_last.settledBy||'?')+
+        ' on '+fmtDMY((_last.settledAt||'').slice(0,10))+
+        (_last.notes?' &middot; '+_last.notes:'')+'</div>'+
+      '<div style="font-size:11px;color:#2e7d32;margin-top:4px;">Next period should start '+
+        fmtDMY(_nextDayISO(_last.freightTo))+'.</div>'+
+    '</div>';
+  } else {
+    html+='<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:9px 12px;margin-bottom:10px;'+
+      'font-size:12px;color:#8a6d00;">No settlement recorded for this truck yet &mdash; everything below is unsettled.</div>';
+  }
+  html+='<div class="freight-summary">';
   html+='<div style="font-size:15px;font-weight:700;">'+truck+'</div>';
   html+='<div style="font-size:11px;color:var(--text-secondary);margin-bottom:10px;">Freight '+lbl.freight+' &middot; '+lbl.payments+'</div>';
   if(L.splitDates){
@@ -5329,7 +5440,10 @@ function _renderTruckLedger(){
   html+='</div>';
 
   // Action buttons + inline payment form
-  if(canPrint) html+='<div style="margin-bottom:10px;"><button class="btn btn-secondary btn-sm" onclick="printTruckLedger(window._ftTruck)">&#128424; Print Ledger</button></div>';
+  if(canPrint) html+='<div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;">'+
+    '<button class="btn btn-secondary btn-sm" onclick="printTruckLedger(window._ftTruck)">&#128424; Print Ledger</button>'+
+    '<button class="btn btn-sm" style="background:#27ae60;color:#fff;" onclick="markFreightSettled()">&#10003; Mark Settled</button>'+
+    '</div>';
   html+='<div class="card" style="margin-bottom:12px;padding:12px;">';
   html+='<div style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--text-primary);">&#128178; Record Payment</div>';
   html+='<div style="display:flex;gap:8px;margin-bottom:6px;">';
@@ -5345,7 +5459,9 @@ function _renderTruckLedger(){
     entries.forEach(function(e,i){
       html+='<div class="freight-trip'+(e.receiptReceived?' receipt-ok':'')+'">';
       html+='<div style="display:flex;justify-content:space-between;align-items:flex-start;">';
-      html+='<div><div style="font-weight:600;font-size:14px;">'+e.destination+'</div>';
+      var _st=freightDateSettled(truck,e.date,'trip');
+      html+='<div><div style="font-weight:600;font-size:14px;">'+e.destination+
+        (_st?' <span class="badge badge-done" style="font-size:9px;">settled</span>':'')+'</div>';
       html+='<div style="font-size:12px;color:var(--text-secondary);">'+e.date+(e.notes?' &middot; '+e.notes:'')+'</div></div>';
       html+='<div style="text-align:right;font-size:12px;">';
       html+='<button class="btn btn-sm" style="'+(e.receiptReceived?'background:#27ae60;':'background:#e17055;')+'color:#fff;font-size:11px;padding:3px 8px;" onclick="toggleReceiptStatus(window._ftEntryIds['+i+'])">'+(e.receiptReceived?'&#10003; Receipt OK'+(e.receiptDate?' &middot; '+e.receiptDate:''):'&#9888; Receipt Pending')+'</button>';
@@ -5373,12 +5489,33 @@ function _renderTruckLedger(){
     html+='<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin:12px 0 6px;">Payment History</div>';
     payments.forEach(function(p,pi){
       html+='<div class="freight-payment-row">';
-      html+='<div><div style="font-weight:600;">&#8377;'+p.amount.toLocaleString('en-IN')+'</div>';
+      var _ps=freightDateSettled(truck,p.date,'pay');
+      html+='<div><div style="font-weight:600;">&#8377;'+p.amount.toLocaleString('en-IN')+
+        (_ps?' <span class="badge badge-done" style="font-size:9px;">settled</span>':'')+'</div>';
       html+='<div style="color:var(--text-secondary);font-size:11px;">'+p.date+(p.notes?' &middot; '+p.notes:'')+'</div></div>';
       if(adminOnly){
         html+='<button class="btn btn-sm btn-danger" style="font-size:11px;" onclick="deleteFreightPaymentById(window._ftPayIds['+pi+'])">&#128465;</button>';
       }
       html+='</div>';
+    });
+  }
+
+  // Settlement history — so a two-month-old sign-off is still visible
+  var _hist=loadFreightSettlements().filter(function(s){return s.truckNo===truck;})
+    .sort(function(a,b){return (b.freightTo||'').localeCompare(a.freightTo||'');});
+  if(_hist.length){
+    html+='<div style="font-size:12px;font-weight:700;text-transform:uppercase;color:var(--text-secondary);margin:14px 0 6px;">Settlement History</div>';
+    _hist.forEach(function(s){
+      html+='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);">'+
+        '<div style="font-size:12px;">'+
+          '<div style="font-weight:600;">Freight '+(s.freightFrom?fmtDMY(s.freightFrom)+' → ':'up to ')+fmtDMY(s.freightTo)+'</div>'+
+          '<div style="color:var(--text-secondary);font-size:11px;">'+
+            (s.payTo?'payments to '+fmtDMY(s.payTo)+' &middot; ':'')+
+            'balance &#8377;'+Math.round(s.closing||0).toLocaleString('en-IN')+
+            ' &middot; '+(s.settledBy||'?')+' on '+fmtDMY((s.settledAt||'').slice(0,10))+'</div>'+
+        '</div>'+
+        (adminOnly?'<button class="btn btn-sm btn-danger" style="font-size:11px;" onclick="unsettleFreight(\''+s.id+'\')">Undo</button>':'')+
+      '</div>';
     });
   }
 
@@ -5641,7 +5778,7 @@ function selectPendingSession(idx){
     'addContractor','addSKU','editSKU','toggleSKU',
     'addDestination','editDestination','toggleDestination','deleteDestination',
     'addUser','saveEditUser',
-    'saveWipEntry','saveKarigarPayment'
+    'saveWipEntry','saveKarigarPayment','markFreightSettled','unsettleFreight'
   ];
   // NOT guarded on purpose:
   //  • saveSKUs / saveUsers / saveSessions / saveProdEntries / saveDestinations /
