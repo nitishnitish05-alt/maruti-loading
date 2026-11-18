@@ -952,43 +952,51 @@ try {
     appId:"1:856836961666:web:dbdfe6219397fa07818b9b"
   });
   const _db = firebase.firestore();
+  // Push A: keep the last Firebase error so the sync bar can say WHY an upload failed
+  function _fbNote(e){try{window.__fbLastErr={code:(e&&e.code)||'error',msg:(e&&e.message)||String(e),at:Date.now()};}catch(x){}}
   window._fb = {
-    async saveSession(s){try{await _db.collection("sessions").doc(s.id).set(s);return true;}catch(e){return false;}},
-    async deleteSession(id){try{await _db.collection("sessions").doc(id).delete();return true;}catch(e){return false;}},
-    async loadSessions(){try{const sn=await _db.collection("sessions").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
-    async saveUsers(u){try{await _db.collection("config").doc("users").set({list:u});return true;}catch(e){return false;}},
-    async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){return false;}},
-    async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveDestinations(d){try{await _db.collection("config").doc("destinations").set({list:d});return true;}catch(e){return false;}},
-    async loadDestinations(){try{const sn=await _db.collection("config").doc("destinations").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){return false;}},
-    async saveLabourRates(r){try{await _db.collection("stock_config").doc("labour_rates").set({list:r});return true;}catch(e){return false;}},
-    async saveWipReadings(w){try{await _db.collection("stock_config").doc("wip_readings").set({list:w});return true;}catch(e){return false;}},
-    async loadWipReadings(){try{const sn=await _db.collection("stock_config").doc("wip_readings").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveKarigarPayments(p){try{await _db.collection("stock_config").doc("karigar_payments").set({list:p});return true;}catch(e){return false;}},
-    async saveFreightSettlements(s){try{await _db.collection("stock_config").doc("freight_settlements").set({list:s});return true;}catch(e){return false;}},
-    async loadFreightSettlements(){try{const sn=await _db.collection("stock_config").doc("freight_settlements").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async loadKarigarPayments(){try{const sn=await _db.collection("stock_config").doc("karigar_payments").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async loadLabourRates(){try{const sn=await _db.collection("stock_config").doc("labour_rates").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveContractorPayments(p){try{await _db.collection("stock_config").doc("contractor_payments").set({list:p});return true;}catch(e){return false;}},
-    async loadContractorPayments(){try{const sn=await _db.collection("stock_config").doc("contractor_payments").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async loadContractors(){try{const sn=await _db.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(e){return null;}},
-    async saveProdEntry(e){try{await _db.collection("prod_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
-    async deleteProdEntry(id){try{await _db.collection("prod_entries").doc(id).delete();return true;}catch(e){return false;}},
-    async loadProdEntries(){try{const sn=await _db.collection("prod_entries").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
-    async saveOpeningStock(o){try{await _db.collection("stock_config").doc("opening").set({data:o});return true;}catch(e){return false;}},
-    async loadOpeningStock(){try{const sn=await _db.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(e){return null;}},
+    async saveSession(s){try{await _db.collection("sessions").doc(s.id).set(s);return true;}catch(e){_fbNote(e);return false;}},
+    async deleteSession(id){try{await _db.collection("sessions").doc(id).delete();return true;}catch(e){_fbNote(e);return false;}},
+    async loadSessions(){try{const sn=await _db.collection("sessions").get();return sn.docs.map(d=>d.data());}catch(e){_fbNote(e);return null;}},
+    // Push A: one record, read just before uploading so the upload can merge with it (false = not in the cloud)
+    async loadSession(id){try{const d=await _db.collection("sessions").doc(id).get();return d.exists?d.data():false;}catch(e){_fbNote(e);return null;}},
+    async saveUsers(u){try{await _db.collection("config").doc("users").set({list:u});return true;}catch(e){_fbNote(e);return false;}},
+    async loadUsers(){try{const sn=await _db.collection("config").doc("users").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async saveSKUs(s){try{await _db.collection("config").doc("skus").set({list:s});return true;}catch(e){_fbNote(e);return false;}},
+    async loadSKUs(){try{const sn=await _db.collection("config").doc("skus").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async saveDestinations(d){try{await _db.collection("config").doc("destinations").set({list:d});return true;}catch(e){_fbNote(e);return false;}},
+    async loadDestinations(){try{const sn=await _db.collection("config").doc("destinations").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async saveContractors(c){try{await _db.collection("stock_config").doc("contractors").set({list:c});return true;}catch(e){_fbNote(e);return false;}},
+    async saveLabourRates(r){try{await _db.collection("stock_config").doc("labour_rates").set({list:r});return true;}catch(e){_fbNote(e);return false;}},
+    async saveWipReadings(w){try{await _db.collection("stock_config").doc("wip_readings").set({list:w});return true;}catch(e){_fbNote(e);return false;}},
+    async loadWipReadings(){try{const sn=await _db.collection("stock_config").doc("wip_readings").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async saveKarigarPayments(p){try{await _db.collection("stock_config").doc("karigar_payments").set({list:p});return true;}catch(e){_fbNote(e);return false;}},
+    async saveFreightSettlements(s){try{await _db.collection("stock_config").doc("freight_settlements").set({list:s});return true;}catch(e){_fbNote(e);return false;}},
+    async loadFreightSettlements(){try{const sn=await _db.collection("stock_config").doc("freight_settlements").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async loadKarigarPayments(){try{const sn=await _db.collection("stock_config").doc("karigar_payments").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async loadLabourRates(){try{const sn=await _db.collection("stock_config").doc("labour_rates").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async saveContractorPayments(p){try{await _db.collection("stock_config").doc("contractor_payments").set({list:p});return true;}catch(e){_fbNote(e);return false;}},
+    async loadContractorPayments(){try{const sn=await _db.collection("stock_config").doc("contractor_payments").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async loadContractors(){try{const sn=await _db.collection("stock_config").doc("contractors").get();return sn.exists?sn.data().list:null;}catch(e){_fbNote(e);return null;}},
+    async saveProdEntry(e){try{await _db.collection("prod_entries").doc(e.id).set(e);return true;}catch(e){_fbNote(e);return false;}},
+    async deleteProdEntry(id){try{await _db.collection("prod_entries").doc(id).delete();return true;}catch(e){_fbNote(e);return false;}},
+    async loadProdEntries(){try{const sn=await _db.collection("prod_entries").get();return sn.docs.map(d=>d.data());}catch(e){_fbNote(e);return null;}},
+    async loadProdEntry(id){try{const d=await _db.collection("prod_entries").doc(id).get();return d.exists?d.data():false;}catch(e){_fbNote(e);return null;}},
+    async saveOpeningStock(o){try{await _db.collection("stock_config").doc("opening").set({data:o});return true;}catch(e){_fbNote(e);return false;}},
+    async loadOpeningStock(){try{const sn=await _db.collection("stock_config").doc("opening").get();return sn.exists?sn.data().data:null;}catch(e){_fbNote(e);return null;}},
     listenDone(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()).filter(s=>s.done));},()=>{}); },
-    listenAll(cb){return _db.collection("sessions").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
-    listenFreight(cb){return _db.collection("freight_entries").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
-    listenFreightPayments(cb){return _db.collection("freight_payments").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},()=>{}); },
-    async saveFreightEntry(e){try{await _db.collection("freight_entries").doc(e.id).set(e);return true;}catch(e){return false;}},
-    async deleteFreightEntry(id){try{await _db.collection("freight_entries").doc(id).delete();return true;}catch(e){return false;}},
-    async loadFreightEntries(){try{const sn=await _db.collection("freight_entries").get();return sn.docs.map(d=>d.data());}catch(e){console.error('FREIGHT READ ERROR:',e.code,e.message);return null;}},
-    async saveFreightPayment(p){try{await _db.collection("freight_payments").doc(p.id).set(p);return true;}catch(e){return false;}},
-    async deleteFreightPayment(id){try{await _db.collection("freight_payments").doc(id).delete();return true;}catch(e){return false;}},
-    async loadFreightPayments(){try{const sn=await _db.collection("freight_payments").get();return sn.docs.map(d=>d.data());}catch(e){return null;}},
+    // Push A: hands over a getter, so a burst of snapshots only unpacks the one that gets merged
+    listenAll(cb,ecb){return _db.collection("sessions").onSnapshot(sn=>{cb(function(){return sn.docs.map(d=>d.data());},!!(sn.metadata&&sn.metadata.fromCache));},e=>{_fbNote(e);if(ecb)ecb(e);}); },
+    listenFreight(cb,ecb){return _db.collection("freight_entries").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},e=>{_fbNote(e);if(ecb)ecb(e);}); },
+    listenFreightPayments(cb,ecb){return _db.collection("freight_payments").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()));},e=>{_fbNote(e);if(ecb)ecb(e);}); },
+    // Push A: live production entries for admin/accounts, so reports never read a stale copy
+    listenProdEntries(cb,ecb){return _db.collection("prod_entries").onSnapshot(sn=>{cb(sn.docs.map(d=>d.data()),!!(sn.metadata&&sn.metadata.fromCache));},e=>{_fbNote(e);if(ecb)ecb(e);}); },
+    async saveFreightEntry(e){try{await _db.collection("freight_entries").doc(e.id).set(e);return true;}catch(e){_fbNote(e);return false;}},
+    async deleteFreightEntry(id){try{await _db.collection("freight_entries").doc(id).delete();return true;}catch(e){_fbNote(e);return false;}},
+    async loadFreightEntries(){try{const sn=await _db.collection("freight_entries").get();return sn.docs.map(d=>d.data());}catch(e){_fbNote(e);console.error('FREIGHT READ ERROR:',e.code,e.message);return null;}},
+    async saveFreightPayment(p){try{await _db.collection("freight_payments").doc(p.id).set(p);return true;}catch(e){_fbNote(e);return false;}},
+    async deleteFreightPayment(id){try{await _db.collection("freight_payments").doc(id).delete();return true;}catch(e){_fbNote(e);return false;}},
+    async loadFreightPayments(){try{const sn=await _db.collection("freight_payments").get();return sn.docs.map(d=>d.data());}catch(e){_fbNote(e);return null;}},
   };
   window._fbOK = true;
   window.dispatchEvent(new Event('fbReady'));
@@ -1008,11 +1016,717 @@ let editUserId=null,fbListener=null,fbFreightListener=null,fbPayListener=null;
 let isOnline=navigator.onLine,fbOK=false;
 window.pinLogin=''; window.pinNewUser=''; window.pinEU='';
 
+// ═══════════════════════════════════════════════════════
+// PUSH A (18 Nov 2026) — DEVICE STORAGE, UPLOAD QUEUE, SAFE SYNC
+// ═══════════════════════════════════════════════════════
+// WHY: browsers cap localStorage at ~5 MB. By Nov 2026 the admin/accounts PCs had
+// filled it with loading sessions; every later save failed silently, so those PCs
+// stopped receiving production entries (Contractor Report empty) and new trucks,
+// while the sync bar still said "all synced".
+//
+// WHAT:
+//  • Only the four big record lists (trucks, production entries, freight trips, freight
+//    payments) move to IndexedDB (hundreds of MB), behind the SAME LS()/SS() functions.
+//    Users, SKUs and every settings list stay in localStorage exactly as before — so an
+//    older copy of the app (an old tab, a cached copy, a rollback) always sees the real
+//    master lists, never an empty one.
+//  • Every upload is queued FIRST, carrying its own copy of the data, and leaves the
+//    queue only once Firebase confirms it.
+//  • A truck is merged field by field and row by row against the version the change
+//    started from, so an admin's correction and a phone's new rows both survive.
+//  • Only one tab of the app is active at a time.
+// If IndexedDB is unavailable the big lists fall back to localStorage (old behaviour)
+// and a red bar says so, instead of failing silently.
+var APP_BUILD='18-Nov-2026 · Push A';
+var _IDB_KEYS={'tl_sess_m1':1,'ms_prod_entries':1,'tl_freight_m1':1,'tl_freight_pay_m1':1,'tl_seen_sess':1,'ms_seen_prod':1};
+var _REC_KEYS={'tl_sess_m1':1,'ms_prod_entries':1,'tl_freight_m1':1,'tl_freight_pay_m1':1};
+var _LS_ONLY_KEYS=['tl_u_m1','tl_s_m1','tl_dest_m1','ms_opening','ms_contractors','ms_labour_rates','ms_contractor_payments',
+  'ms_wip_readings','ms_karigar_payments','ms_freight_settlements'];
+var _MEM=Object.create(null);          // IndexedDB keys only: key -> JSON string
+var _storeEngine='starting';           // 'indexeddb' | 'localStorage' (fallback) | 'starting'
+var _storeErrs=Object.create(null);    // key -> {msg,at} — any entry turns the sync bar red
+var _idb=null,_idbQ=Object.create(null),_preDirty=Object.create(null);
+var _storeReadyResolve;
+var storeReady=new Promise(function(r){_storeReadyResolve=r;});
+
+function _errText(e){if(!e)return 'unknown error';return ((e.name&&e.name!=='Error')?e.name+': ':'')+(e.message||String(e));}
+function _storeKeyFail(k,e){_storeErrs[k]={msg:_errText(e),at:Date.now()};try{console.error('[storage] '+k,e);}catch(x){}try{refreshSyncBar();}catch(x){}}
+function _storeKeyOk(k){if(_storeErrs[k]){delete _storeErrs[k];try{refreshSyncBar();}catch(x){}}}
+function _storeErrAny(){var ks=Object.keys(_storeErrs);return ks.length?_storeErrs[ks[0]].msg:'';}
+function _jclone(v){return v===undefined?undefined:JSON.parse(JSON.stringify(v));}
+function _eqJ(a,b){return JSON.stringify(a)===JSON.stringify(b);}
+
+// ═══ ONE ACTIVE TAB ═══
+// Two open tabs each hold a memory copy of the big lists; whichever saved last would
+// overwrite the other's work. So opening the app in a new tab pauses the older tab
+// (after its last writes have landed); "Use the app here" reloads it fresh.
+var _tabId=Date.now().toString(36)+Math.random().toString(36).slice(2,8),_tabStart=Date.now();
+var _tabInactive=false,_tabBC=null,_tabAckWait=null;
+function _tabMsg(m){try{if(_tabBC)_tabBC.postMessage(m);}catch(e){}}
+function _showPausedOverlay(){
+  if(document.getElementById('tab-paused'))return;
+  var d=document.createElement('div');d.id='tab-paused';
+  d.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;z-index:99999;background:rgba(20,20,20,.9);color:#fff;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;';
+  d.innerHTML='<div style="max-width:360px;"><div style="font-size:40px;margin-bottom:10px;">⏸️</div>'+
+    '<div style="font-size:17px;font-weight:700;margin-bottom:8px;">The app is open in another tab</div>'+
+    '<div style="font-size:14px;opacity:.85;margin-bottom:18px;">This tab is paused so the two cannot overwrite each other\'s data. Nothing has been lost.</div>'+
+    '<button class="btn btn-primary" style="width:auto;padding:10px 22px;" onclick="location.reload()">Use the app here</button></div>';
+  (document.body||document.documentElement).appendChild(d);
+}
+function _pauseTab(requester){
+  if(!_tabInactive){
+    _tabInactive=true;
+    try{if(fbListener){fbListener();fbListener=null;}}catch(e){}
+    try{if(fbFreightListener){fbFreightListener();fbFreightListener=null;}}catch(e){}
+    try{if(fbPayListener){fbPayListener();fbPayListener=null;}}catch(e){}
+    try{if(fbProdListener){fbProdListener();fbProdListener=null;}}catch(e){}
+    try{stopAutoSave();stopTimer();}catch(e){}
+    try{if(document.body)_showPausedOverlay();else document.addEventListener('DOMContentLoaded',_showPausedOverlay);}catch(e){}
+  }
+  // Writes started before the pause still finish; tell the new tab once they have
+  var t0=Date.now();
+  (function wait(){if(_idbPendingWrites()===0||Date.now()-t0>3000)_tabMsg({t:'flushed',id:_tabId,to:requester});else setTimeout(wait,20);})();
+}
+try{
+  if(typeof BroadcastChannel!=='undefined'){
+    _tabBC=new BroadcastChannel('maruti-loading-tab');
+    _tabBC.onmessage=function(ev){
+      var d=(ev&&ev.data)||{};if(!d.id||d.id===_tabId)return;
+      if(d.t==='hello'){
+        var newer=(d.start>_tabStart)||(d.start===_tabStart&&d.id>_tabId);
+        if(newer||_tabInactive){_tabMsg({t:'ack',id:_tabId,to:d.id});_pauseTab(d.id);}
+      }else if(d.to===_tabId&&_tabAckWait){
+        if(d.t==='ack')_tabAckWait.ack();else if(d.t==='flushed')_tabAckWait.flushed();
+      }
+    };
+  }
+}catch(e){_tabBC=null;}
+function _tabHandshake(){
+  return new Promise(function(res){
+    if(!_tabBC){res();return;}
+    var acks=0,flushed=0,t=null,fin=false;
+    function done(){if(fin)return;fin=true;_tabAckWait=null;if(t)clearTimeout(t);res();}
+    _tabAckWait={ack:function(){acks++;if(t)clearTimeout(t);t=setTimeout(done,3000);},flushed:function(){flushed++;if(flushed>=acks)done();}};
+    _tabMsg({t:'hello',id:_tabId,start:_tabStart});
+    t=setTimeout(done,150);
+  });
+}
+
+// ═══ INDEXEDDB (big lists only) ═══
+// One write in flight per key; a newer value queued behind it replaces any older one.
+function _idbFlush(k){
+  if(!_idb)return;
+  var q=_idbQ[k]||(_idbQ[k]={busy:false,again:false,retry:null});
+  if(q.busy){q.again=true;return;}
+  q.busy=true;q.again=false;
+  var v=_MEM[k],settled=false;
+  function done(err){
+    if(settled)return;settled=true;q.busy=false;
+    if(err){_storeKeyFail(k,err);if(!q.again&&!q.retry)q.retry=setTimeout(function(){q.retry=null;_idbFlush(k);},10000);}
+    else _storeKeyOk(k);
+    if(q.again)_idbFlush(k);
+  }
+  try{
+    var tx=_idb.transaction('kv','readwrite'),st=tx.objectStore('kv');
+    if(v===undefined)st.delete(k);else st.put(v,k);
+    tx.oncomplete=function(){done(null);};
+    tx.onerror=function(){done(tx.error||new Error('IndexedDB write failed'));};
+    tx.onabort=function(){done(tx.error||new Error('IndexedDB write aborted'));};
+  }catch(e){done(e);}
+}
+function _persistKey(k){
+  if(_storeEngine==='indexeddb')_idbFlush(k);
+  else if(_storeEngine==='starting')_preDirty[k]=1;
+  else{try{if(_MEM[k]===undefined)localStorage.removeItem(k);else localStorage.setItem(k,_MEM[k]);_storeKeyOk(k);}catch(e){_storeKeyFail(k,e);}}
+}
+function _idbPendingWrites(){var n=0;Object.keys(_idbQ).forEach(function(k){if(_idbQ[k].busy||_idbQ[k].again)n++;});return n;}
+// Record lists that exist in both stores: keep every record, the second copy wins on the same id.
+function _unionById(aStr,bStr){
+  var a,b;try{a=JSON.parse(aStr);}catch(e){a=null;}try{b=JSON.parse(bStr);}catch(e){b=null;}
+  if(!Array.isArray(a))return bStr;if(!Array.isArray(b))return aStr;
+  var m={},order=[],extra=[];
+  [a,b].forEach(function(list){list.forEach(function(x){
+    if(!x||x.id===undefined||x.id===null){if(list===b)extra.push(x);return;}
+    if(!(x.id in m))order.push(x.id);m[x.id]=x;
+  });});
+  return JSON.stringify(order.map(function(id){return m[id];}).concat(extra));
+}
+
+(function _initStore(){
+  var finished=false,timer=null;
+  function finish(engine){
+    if(finished)return;finished=true;if(timer)clearTimeout(timer);
+    _storeEngine=engine;
+    Object.keys(_preDirty).forEach(function(k){_persistKey(k);});
+    _preDirty=Object.create(null);
+    _storeReadyResolve(engine);
+  }
+  function fallback(e){if(finished)return;_storeKeyFail('device-storage',e);finish('localStorage');}
+  function open(){
+    var factory=null;try{factory=window.indexedDB||null;}catch(e){factory=null;}
+    if(!factory){fallback(new Error('IndexedDB is not available in this browser'));return;}
+    timer=setTimeout(function(){fallback(new Error('IndexedDB did not open within 10 s'));},10000);
+    var req;
+    try{req=factory.open('maruti_loading',1);}catch(e){fallback(e);return;}
+    req.onupgradeneeded=function(){try{req.result.createObjectStore('kv');}catch(e){}};
+    req.onerror=function(){fallback(req.error||new Error('IndexedDB open failed'));};
+    req.onsuccess=function(){
+      if(finished){try{req.result.close();}catch(e){}return;}
+      var db=req.result;
+      db.onversionchange=function(){try{db.close();}catch(e){}};
+      var idbVals=Object.create(null);
+      try{
+        var tx=db.transaction('kv','readonly'),cur=tx.objectStore('kv').openCursor();
+        cur.onsuccess=function(){var c=cur.result;if(c){idbVals[c.key]=c.value;c.continue();}};
+        tx.oncomplete=function(){adopt(db,idbVals);};
+        tx.onerror=tx.onabort=function(){fallback(tx.error||new Error('IndexedDB read failed'));};
+      }catch(e){fallback(e);}
+    };
+  }
+  function adopt(db,idbVals){
+    if(finished)return;
+    var toWrite={},toDelete=[],moved=[];
+    // Settings lists belong in localStorage; if one ever ended up in IndexedDB only, put it back
+    _LS_ONLY_KEYS.forEach(function(k){
+      if(idbVals[k]===undefined)return;
+      var ls=null;try{ls=localStorage.getItem(k);}catch(e){}
+      if(ls===null){try{localStorage.setItem(k,idbVals[k]);}catch(e){}}
+      toDelete.push(k);
+    });
+    Object.keys(_IDB_KEYS).forEach(function(k){
+      if(idbVals[k]!==undefined&&_MEM[k]===undefined)_MEM[k]=idbVals[k];
+      var ls=null;try{ls=localStorage.getItem(k);}catch(e){}
+      if(ls===null)return;
+      moved.push(k);
+      if(_preDirty[k])return;                       // already rewritten this session
+      var iv=idbVals[k];
+      var v=(iv===undefined)?ls:(_REC_KEYS[k]?_unionById(iv,ls):ls);
+      _MEM[k]=v;toWrite[k]=v;
+    });
+    if(moved.length&&Object.keys(idbVals).some(function(k){return _IDB_KEYS[k];}))
+      _logSync('Found records saved by an older version of the app on this device — merged them in');
+    function removeLegacy(){moved.forEach(function(k){try{localStorage.removeItem(k);}catch(e){}});}
+    var keys=Object.keys(toWrite);
+    if(!keys.length&&!toDelete.length){_idb=db;removeLegacy();finish('indexeddb');return;}
+    try{
+      var tx=db.transaction('kv','readwrite'),st=tx.objectStore('kv');
+      keys.forEach(function(k){st.put(toWrite[k],k);});
+      toDelete.forEach(function(k){st.delete(k);});
+      // Only after the copy is safely written is the old localStorage copy removed
+      tx.oncomplete=function(){_idb=db;removeLegacy();finish('indexeddb');};
+      tx.onerror=tx.onabort=function(){fallback(tx.error||new Error('Moving data to IndexedDB failed'));};
+    }catch(e){fallback(e);}
+  }
+  _tabHandshake().then(open);
+})();
+
+// ── Dates: always Indian time (toISOString() is UTC — wrong 00:00–05:30 IST) ──
+function _istToday(){try{return new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});}catch(e){return new Date(Date.now()+330*60000).toISOString().slice(0,10);}}
+function _ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+var _lastStamp='';
+function _nowIso(){var s=new Date().toISOString();if(s<=_lastStamp)s=new Date(new Date(_lastStamp).getTime()+1).toISOString();_lastStamp=s;return s;}
+function _fmtTime(t){if(!t)return '';var d=new Date(t);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+
+// ── Sync notes (shown in Data health) ──
+var _syncLog=[];
+try{_syncLog=JSON.parse(localStorage.getItem('tl_synclog_m1'))||[];}catch(e){_syncLog=[];}
+function _logSync(msg){
+  if(_syncLog[0]&&_syncLog[0].msg===msg){_syncLog[0].at=Date.now();}
+  else{_syncLog.unshift({at:Date.now(),msg:msg});if(_syncLog.length>30)_syncLog.length=30;}
+  if(_tabInactive)return;
+  try{localStorage.setItem('tl_synclog_m1',JSON.stringify(_syncLog));}catch(e){}
+}
+
+// ── Live-sync health (admin/accounts devices) ──
+var __sessLive={ok:false,at:0,err:''},__prodLive={ok:false,at:0,err:''};
+var _cloudSessIds=null,_cloudProdIds=null;   // last complete cloud id lists
+var fbProdListener=null,_sessMergeTimer=null,_sessLatest=null;
+var _liveBase=[];   // rows as the loading screen loaded them — see persistLive()
+var _lastUploadOk=0,_lastUploadErr=null;
+
+// ═══ UPLOAD QUEUE (outbox) ═══
+// Every cloud write is queued FIRST — with its own copy of the data — and leaves the queue
+// only once Firebase confirms it. Previously a write was queued only if the phone looked
+// offline, the queue held just an id, and Sign out deleted the data the id pointed to.
+// A truck also remembers the version its change started from ("base"), so the upload can
+// merge with whatever other devices did meanwhile instead of overwriting it.
+var OB_KEY='tl_outbox_v2',_OB=null,_obSeq=0;
+function _obAll(){
+  if(_OB)return _OB;
+  var a;try{a=JSON.parse(localStorage.getItem(OB_KEY))||[];}catch(e){a=[];}
+  if(!Array.isArray(a))a=[];
+  a.forEach(function(x){if(x&&x.seq>_obSeq)_obSeq=x.seq;});
+  // not cached until device storage is ready: a tab being replaced may still write its last change
+  if(_storeEngine!=='starting')_OB=a;
+  return a;
+}
+function _obSave(){if(_tabInactive)return;try{localStorage.setItem(OB_KEY,JSON.stringify(_OB||[]));_storeKeyOk(OB_KEY);}catch(e){_storeKeyFail(OB_KEY,e);}}
+function _obFind(type,id){var a=_obAll();for(var i=0;i<a.length;i++){if(a[i].type===type&&a[i].id===id)return a[i];}return null;}
+function withTimeout(p,ms){return new Promise(function(res){var t=setTimeout(function(){res('timeout');},ms);Promise.resolve(p).then(function(v){clearTimeout(t);res(v);},function(){clearTimeout(t);res(false);});});}
+var _SING=null;
+function _singletons(){
+  if(_SING)return _SING;
+  _SING={
+    users:{load:loadUsersLocal,save:'saveUsers'},
+    skus:{load:loadSKUsLocal,save:'saveSKUs'},
+    destinations:{load:loadDestinationsLocal,save:'saveDestinations'},
+    contractors:{load:loadContractors,save:'saveContractors'},
+    labour_rates:{load:loadLabourRates,save:'saveLabourRates'},
+    wip_readings:{load:loadWipReadings,save:'saveWipReadings'},
+    karigar_payments:{load:loadKarigarPayments,save:'saveKarigarPayments'},
+    freight_settlements:{load:loadFreightSettlements,save:'saveFreightSettlements'},
+    contractor_payments:{load:loadContractorPayments,save:'saveContractorPayments'},
+    opening:{load:loadOpeningStock,save:'saveOpeningStock'}
+  };
+  return _SING;
+}
+// Read-only id → record lookup, rebuilt only when that key's data changes (an admin PC
+// holds 3,000+ trucks; re-reading them all for every lookup was ~50 ms each).
+var _idxCache=Object.create(null);
+function _recIndex(key){
+  var s=_MEM[key];if(s===undefined)return null;
+  var c=_idxCache[key];if(c&&c.s===s)return c.m;
+  var arr;try{arr=JSON.parse(s);}catch(e){return null;}
+  var m=Object.create(null);
+  if(Array.isArray(arr))arr.forEach(function(x){if(x&&x.id!==undefined&&x.id!==null)m[x.id]=x;});
+  _idxCache[key]={s:s,m:m};return m;
+}
+function _findRec(key,id){var m=_recIndex(key);if(m)return m[id]||null;return (LS(key)||[]).find(function(x){return x&&x.id===id;})||null;}
+var _RECORDS={
+  session:{key:function(){return K.SESSIONS;},save:'saveSession',del:'deleteSession'},
+  prod_entry:{key:function(){return SK.PROD_ENTRIES;},save:'saveProdEntry',del:'deleteProdEntry'},
+  freight_entry:{key:function(){return K.FREIGHT_ENTRIES;},save:'saveFreightEntry',del:'deleteFreightEntry'},
+  freight_payment:{key:function(){return K.FREIGHT_PAYMENTS;},save:'saveFreightPayment',del:'deleteFreightPayment'}
+};
+function _resolvePayload(type,id){
+  var sg=_singletons()[type];if(sg)return {ok:true,data:_jclone(sg.load())};
+  if(/_delete$/.test(type))return {ok:true,data:null};
+  var rec=_RECORDS[type];if(!rec)return {ok:false};
+  var o=_findRec(rec.key(),id);return o?{ok:true,data:_jclone(o)}:{ok:false};
+}
+// Put (or refresh) one queued change. A newer change to the same record replaces the data
+// but keeps the queue position and — for trucks — the original base.
+function _obPut(type,id,opts){
+  if(_tabInactive)return null;
+  opts=opts||{};
+  var data;
+  if(Object.prototype.hasOwnProperty.call(opts,'data'))data=_jclone(opts.data);
+  else{var r=_resolvePayload(type,id);if(!r.ok){_logSync('Nothing to upload for '+type+' '+id+' — not on this device');return null;}data=r.data;}
+  var other=/_delete$/.test(type)?type.replace(/_delete$/,''):type+'_delete';
+  _OB=_obAll().filter(function(x){return !(x.type===other&&x.id===id);});
+  var it=null;for(var oi=0;oi<_OB.length;oi++){if(_OB[oi].type===type&&_OB[oi].id===id){it=_OB[oi];break;}}
+  if(it){it.data=data;it.seq=++_obSeq;if(opts.after)it.after=opts.after;delete it.held;delete it.force;}
+  else{
+    it={type:type,id:id,at:Date.now(),seq:++_obSeq,data:data};
+    if(type==='session')it.base=Object.prototype.hasOwnProperty.call(opts,'base')?_jclone(opts.base):null;
+    if(opts.after)it.after=opts.after;
+    _OB.push(it);
+  }
+  _obSave();
+  return it;
+}
+// Same calls the app used before (getPQ/addPQ/delPQ), now backed by the outbox
+function hasPQ(type,id){return !!_obFind(type,id);}
+function _pendingIds(type){var o={};_obAll().forEach(function(x){if(x.type===type)o[x.id]=1;});return o;}
+// A truck change: queue it, remembering the version it started from (kept if already queued)
+function _enqueueSession(id,prev){
+  if(_obFind('session',id))return _obPut('session',id);
+  return _obPut('session',id,{base:prev||null});
+}
+// The previous version's queue (ids only) is moved over once, after device data has loaded
+function _migrateLegacyQueue(){
+  var old=null;try{old=JSON.parse(localStorage.getItem('tl_pend_m1'));}catch(e){old=null;}
+  if(Array.isArray(old)&&old.length){
+    var n=0;old.forEach(function(x){if(x&&x.type&&_obPut(x.type,x.id,x.after?{after:x.after}:{}))n++;});
+    _logSync('Moved '+n+' waiting upload(s) over from the previous version');
+  }
+  try{localStorage.removeItem('tl_pend_m1');}catch(e){}
+}
+storeReady.then(function(){if(!_tabInactive)_migrateLegacyQueue();});
+
+// ═══ MERGING ONE TRUCK ═══
+// base = the version this device's change started from; mine = this device's copy;
+// theirs = the cloud's copy. A field or row this device changed keeps this device's
+// value; everything else takes the cloud's. (Rows are fixed at creation, keyed by number.)
+function _rowKey(r,i){return (r&&r.row!==undefined&&r.row!==null)?'r'+r.row:'i'+i;}
+function _mergeRows(base,mine,theirs){
+  var B={},M={},T={},order=[],seen={};
+  function add(list,map){(list||[]).forEach(function(r,i){var k=_rowKey(r,i);map[k]=r;
+    if(!seen[k]){seen[k]=1;order.push({k:k,n:(r&&r.row!==undefined&&r.row!==null)?Number(r.row):i+1});}});}
+  add(theirs,T);add(mine,M);add(base,B);
+  order.sort(function(a,b){return a.n-b.n;});
+  var out=[];
+  order.forEach(function(o){var m=M[o.k],b=B[o.k],t=T[o.k];
+    if(m!==undefined&&!_eqJ(m,b))out.push(_jclone(m));
+    else if(t!==undefined)out.push(_jclone(t));
+    else if(m!==undefined)out.push(_jclone(m));
+  });
+  return out;
+}
+function _merge3Sess(base,mine,theirs){
+  if(!mine)return _jclone(theirs);
+  if(!base||!theirs)return _jclone(mine);
+  var out={},keys={};
+  [base,mine,theirs].forEach(function(o){Object.keys(o).forEach(function(k){keys[k]=1;});});
+  Object.keys(keys).forEach(function(k){
+    if(k==='rowData')return;
+    var v=_eqJ(mine[k],base[k])?(Object.prototype.hasOwnProperty.call(theirs,k)?theirs[k]:mine[k]):mine[k];
+    if(v!==undefined)out[k]=_jclone(v);
+  });
+  out.rowData=_mergeRows(base.rowData,mine.rowData,theirs.rowData);
+  return out;
+}
+// ═══ SKU MERGE AS ONE COMPACT JOB ═══
+// Merging two SKUs can touch hundreds of trucks. Instead of queueing each truck (megabytes),
+// one job holds just the ids; uploading it re-reads each record from the cloud, swaps the
+// SKU and saves it back — so a truck a phone finished meanwhile keeps its new rows.
+function _remapSess(s,src,tgt){var ch=false;((s&&s.rowData)||[]).forEach(function(r){((r&&r.entries)||[]).forEach(function(e){if(e&&e.skuId==src){e.skuId=tgt;ch=true;}});});return ch;}
+function _remapProd(e,src,tgt){var ch=false;((e&&e.items)||[]).forEach(function(it){if(it&&it.skuId==src){it.skuId=tgt;ch=true;}});return ch;}
+function _queueSkuRemap(src,tgt,sessIds,prodIds){
+  var id=String(src)+'>'+String(tgt),it=_obFind('sku_remap',id),d;
+  if(it){d=it.data;sessIds.forEach(function(x){if(d.sess.indexOf(x)<0)d.sess.push(x);});prodIds.forEach(function(x){if(d.prod.indexOf(x)<0)d.prod.push(x);});_obSave();}
+  else _obPut('sku_remap',id,{data:{src:src,tgt:tgt,sess:sessIds.slice(),prod:prodIds.slice()}});
+  // queued truck / production changes made before the merge carry the new SKU too
+  _obAll().forEach(function(x){
+    if(x.type==='session'&&sessIds.indexOf(x.id)>=0){_remapSess(x.data,src,tgt);if(x.base)_remapSess(x.base,src,tgt);}
+    if(x.type==='prod_entry'&&prodIds.indexOf(x.id)>=0)_remapProd(x.data,src,tgt);
+  });
+  _obSave();
+}
+function _pendingRemaps(){return _obAll().filter(function(x){return x.type==='sku_remap'&&x.data;}).map(function(x){return x.data;});}
+async function _runSkuRemap(it){
+  var d=it.data,r,cur;
+  if(!window._fb.loadSession||!window._fb.loadProdEntry)return 'skip';
+  while(d.sess.length){
+    var sid=d.sess[0];
+    cur=await withTimeout(window._fb.loadSession(sid),20000);
+    if(cur===null||cur==='timeout')return _noteFail('sku_remap',cur);
+    if(cur&&_remapSess(cur,d.src,d.tgt)){
+      cur.updatedAt=_nowIso();
+      r=await withTimeout(window._fb.saveSession(cur),20000);
+      if(r!==true)return _noteFail('sku_remap',r);
+      // (this device's copy was already updated by the merge; the live feed brings the cloud copy)
+    }
+    d.sess.shift();_obSave();
+  }
+  while(d.prod.length){
+    var pid=d.prod[0];
+    cur=await withTimeout(window._fb.loadProdEntry(pid),20000);
+    if(cur===null||cur==='timeout')return _noteFail('sku_remap',cur);
+    if(cur&&_remapProd(cur,d.src,d.tgt)){
+      cur.updatedAt=_nowIso();
+      r=await withTimeout(window._fb.saveProdEntry(cur),20000);
+      if(r!==true)return _noteFail('sku_remap',r);
+    }
+    d.prod.shift();_obSave();
+  }
+  _lastUploadOk=Date.now();delPQ('sku_remap',it.id);
+  return 'ok';
+}
+
+// Write a truck to this device only (no upload) — used for cloud copies and confirmations
+function _putSessLocal(s){
+  if(!s||!s.id||getDeleted().indexOf(s.id)>=0)return;
+  var a=loadSessions(),i=a.findIndex(function(x){return x.id===s.id;});
+  if(i>=0){if(_eqJ(a[i],s))return;a[i]=s;}else a.push(s);
+  saveSessions(a);
+}
+
+var _inflight=Object.create(null);
+function _noteFail(type,r){
+  var code=r==='timeout'?'timeout':((window.__fbLastErr&&window.__fbLastErr.code)||'failed');
+  _lastUploadErr={type:type,code:code,at:Date.now()};
+  return 'fail';
+}
+// Settings lists: remember how many records the cloud copy holds, so an upload that would
+// suddenly delete most of them (an empty or default list) is held back for review.
+function _docCount(v){if(Array.isArray(v))return v.length;if(v&&typeof v==='object')return Object.keys(v).length;return 0;}
+function _cloudCounts(){try{return JSON.parse(localStorage.getItem('tl_cloudcounts_v2'))||{};}catch(e){return {};}}
+function _setCloudCount(type,n){if(_tabInactive)return;var c=_cloudCounts();if(c[type]===n)return;c[type]=n;try{localStorage.setItem('tl_cloudcounts_v2',JSON.stringify(c));}catch(e){}}
+// Try one queued item. Returns 'ok' | 'fail' | 'offline' | 'busy' | 'wait' | 'held' | 'skip'
+async function _attemptItem(ref){
+  if(_tabInactive)return 'skip';
+  if(!fbOK||!isOnline||!window._fb)return 'offline';
+  var t=ref.type,key=t+':'+ref.id;
+  var it=_obFind(t,ref.id);if(!it)return 'ok';          // already uploaded
+  if(_inflight[key])return 'busy';
+  _inflight[key]=true;
+  try{
+    var r,seq0=it.seq;
+    if(t==='sku_remap')return await _runSkuRemap(it);
+    var sg=_singletons()[t];
+    if(sg){
+      if(!window._fb[sg.save])return 'skip';
+      var n=_docCount(it.data),c=_cloudCounts()[t];
+      if(!it.force&&c>=4&&n<c*0.5){
+        if(!it.held){it.held=true;_obSave();_logSync('Held back the '+t.replace(/_/g,' ')+' upload: it would cut the cloud copy from '+c+' to '+n+' records. Review it in Data health.');}
+        return 'held';
+      }
+      r=await withTimeout(window._fb[sg.save](it.data),20000);
+      if(r!==true)return _noteFail(t,r);
+      _lastUploadOk=Date.now();_setCloudCount(t,n);
+      var nowS=_obFind(t,ref.id);if(nowS&&nowS.seq===seq0)delPQ(t,ref.id);else setTimeout(syncQueue,500);
+      return 'ok';
+    }
+    if(/_delete$/.test(t)){
+      var drec=_RECORDS[t.replace(/_delete$/,'')];
+      if(!drec||!window._fb[drec.del])return 'skip';
+      // A replaced production entry is deleted only once its replacement is safely uploaded
+      if(it.after&&hasPQ(t.replace(/_delete$/,''),it.after))return 'wait';
+      r=await withTimeout(window._fb[drec.del](ref.id),20000);
+      if(r!==true)return _noteFail(t,r);
+      _lastUploadOk=Date.now();delPQ(t,ref.id);return 'ok';
+    }
+    var rec=_RECORDS[t];
+    if(!rec||!window._fb[rec.save])return 'skip';
+    if(t==='session'){
+      // Read the cloud copy first and merge, so nothing another device did meanwhile is overwritten
+      var cur=window._fb.loadSession?await withTimeout(window._fb.loadSession(ref.id),20000):false;
+      if(cur===null||cur==='timeout')return _noteFail(t,cur);
+      var data0=it.data,merged;
+      if(cur===false){
+        merged=_jclone(data0);
+        if(it.base)_logSync('Truck '+(data0.truck||ref.id)+' ('+(data0.date||'')+') was removed from the cloud on another device, but this device had unsent changes — uploaded it again');
+      }else merged=it.base?_merge3Sess(it.base,data0,cur):_jclone(data0);
+      merged.updatedAt=_nowIso();if(merged.done)merged.synced=true;
+      r=await withTimeout(window._fb.saveSession(merged),20000);
+      if(r!==true)return _noteFail(t,r);
+      _lastUploadOk=Date.now();
+      var now=_obFind(t,ref.id);
+      if(now&&now.seq===seq0){delPQ(t,ref.id);_putSessLocal(merged);}
+      else if(now){
+        // Changed on this device while uploading: carry the newer change onto what the cloud now holds
+        var rebased=_merge3Sess(data0,now.data,merged);
+        now.base=_jclone(merged);now.data=rebased;now.seq=++_obSeq;_obSave();
+        _putSessLocal(rebased);setTimeout(syncQueue,500);
+      }
+      return 'ok';
+    }
+    r=await withTimeout(window._fb[rec.save](_jclone(it.data)),20000);
+    if(r!==true)return _noteFail(t,r);
+    _lastUploadOk=Date.now();
+    var nowR=_obFind(t,ref.id);
+    if(nowR&&nowR.seq===seq0)delPQ(t,ref.id);else if(nowR)setTimeout(syncQueue,500);
+    if(_obAll().some(function(x){return x.after===ref.id;}))setTimeout(syncQueue,0);
+    return 'ok';
+  }finally{delete _inflight[key];}
+}
+function cloudSaveRecord(type,id){
+  // A truck is queued by saveSess() whenever it changes (createSession queues a new one).
+  // With nothing queued there is nothing to send — and a blind re-upload of an old copy
+  // is exactly what used to undo other devices' work.
+  if(type==='session'){if(_obFind('session',id))_obPut('session',id);}
+  else _obPut(type,id);
+  var p=_attemptItem({type:type,id:id});p.then(function(){refreshSyncBar();});return p;
+}
+function cloudDeleteRecord(type,id,after){
+  delPQ(type,id);                                 // never upload something being deleted
+  _obPut(type+'_delete',id,after?{after:after,data:null}:{data:null});
+  var p=_attemptItem({type:type+'_delete',id:id});p.then(function(){refreshSyncBar();});return p;
+}
+function cloudSaveDoc(type){_obPut(type,type);var p=_attemptItem({type:type,id:type});p.then(function(){refreshSyncBar();});return p;}
+
+// ═══ SYNC BAR (honest) ═══
+function _syncState(){
+  var all=_obAll(),pend=all.length,held=all.filter(function(x){return x.held;}).length,se=_storeErrAny();
+  if(se)return {cls:'error',msg:'❌ This device could not save data ('+se+'). Tap for details'};
+  if(!fbOK)return {cls:'error',msg:'❌ Not connected to cloud'+(pend?' — '+pend+' change(s) kept on this device':'')};
+  if(!isOnline)return {cls:'offline',msg:'⚠️ Offline — '+(pend?pend+' change(s) kept on this device, will upload when connected':'changes will sync when connected')};
+  if(held)return {cls:'error',msg:'⚠️ '+held+' settings change(s) held back for your review. Tap for details'};
+  if(pend){
+    var e=(_lastUploadErr&&Date.now()-_lastUploadErr.at<120000)?_lastUploadErr:null;
+    if(e)return {cls:'error',msg:'❌ '+pend+' change(s) waiting — upload failing ('+e.code+'), retrying every 30 s. Tap for details'};
+    return {cls:'syncing',msg:'🔄 Uploading '+pend+' change(s)…'};
+  }
+  var le=(isAdmin()||isAccounts())?(__sessLive.err||__prodLive.err):'';
+  if(le)return {cls:'error',msg:'❌ Live sync stopped ('+le+'). Tap for details'};
+  return {cls:'online',msg:'✅ Connected — all changes saved to cloud'+(_lastUploadOk?' · last upload '+_fmtTime(_lastUploadOk):'')};
+}
+function _loadingSyncLine(){
+  if(!curSessId)return '';
+  if(hasPQ('session',curSessId))return '<span style="color:var(--amber);">📱 Saved on this phone — uploading…</span>';
+  return '<span style="color:var(--green);">☁️ Saved to cloud</span>';
+}
+function refreshSyncBar(){
+  var st=_syncState();
+  var html='<div class="sync-bar '+st.cls+'" style="cursor:pointer;" onclick="openDataHealth()"><span class="sdot" style="background:currentColor;opacity:.7;"></span>'+st.msg+'</div>';
+  var a=document.getElementById('sync-bar');if(a)a.innerHTML=html;
+  var b=document.getElementById('stock-sync-bar');if(b)b.innerHTML=html;
+  var c=document.getElementById('loading-sync-line');if(c)c.innerHTML=_loadingSyncLine();
+}
+// Retry every 30 s, and whenever the app comes back to the foreground
+setInterval(function(){if(_tabInactive)return;if(_obAll().length)syncQueue();else{try{refreshSyncBar();}catch(e){}}},30000);
+document.addEventListener('visibilitychange',function(){if(!_tabInactive&&!document.hidden&&_obAll().length)syncQueue();});
+
+// ═══ MERGING CLOUD COPIES INTO THIS DEVICE ═══
+// A truck with unsent changes on this device: those changes are carried onto the new
+// cloud copy (field by field, row by row). Any other truck: the cloud copy wins.
+// One exception, run once per device: a finished truck that the OLD version failed to
+// upload (it stayed "Active" in the cloud) is recovered from its owner's phone.
+function _isSessOpen(id){
+  if(!id||id!==curSessId)return false;
+  var a=document.querySelector('.screen.active'),sid=a?a.id:'';
+  return sid==='screen-loading'||sid==='screen-edit-session';
+}
+function _filledCount(s){var n=0;((s&&s.rowData)||[]).forEach(function(r){((r&&r.entries)||[]).forEach(function(e){if(e&&e.skuId&&parseFloat(e.qty)>0)n++;});});return n;}
+function _isOwn(s){return !!(CU&&s&&s.createdBy===CU.username);}
+function _legacyStranded(ls,cs){
+  if(ls.updatedAt||!_isOwn(ls)||cs.done)return false;
+  if(ls.done&&ls.synced!==true)return _filledCount(ls)>=_filledCount(cs);
+  return !ls.done&&_filledCount(ls)>_filledCount(cs);
+}
+// complete=true only for a full server list (not a partial offline cache)
+function _mergeSessionsFromCloud(cloudAll,complete){
+  if(!Array.isArray(cloudAll))return false;
+  if(_tabInactive)return false;
+  var deleted=getDeleted(),pend=_pendingIds('session');
+  var seen=LS('tl_seen_sess')||{},seenChanged=false,cloudIds={};
+  cloudAll.forEach(function(cs){if(cs&&cs.id){cloudIds[cs.id]=cs.done?2:1;if(complete&&!seen[cs.id]){seen[cs.id]=1;seenChanged=true;}}});
+  if(complete)_cloudSessIds=cloudIds;
+  var legacyOn=complete&&localStorage.getItem('tl_legacy_rec_v2')!=='1';
+  var loc=loadSessions(),idx={},changed=false,recovered=0,obDirty=false;
+  loc.forEach(function(s,i){if(s&&s.id)idx[s.id]=i;});
+  var onlyMine=!(isAdmin()||isAccounts());
+  var remaps=_pendingRemaps();
+  cloudAll.forEach(function(cs){
+    if(!cs||!cs.id||deleted.indexOf(cs.id)>=0)return;
+    if(onlyMine&&cs.createdBy&&CU&&cs.createdBy!==CU.username)return;
+    // an SKU merge still uploading: show its cloud copies with the new SKU already
+    remaps.forEach(function(d){if(d.sess.indexOf(cs.id)>=0){cs=_jclone(cs);_remapSess(cs,d.src,d.tgt);}});
+    var i=idx[cs.id];
+    var it=pend[cs.id]?_obFind('session',cs.id):null;
+    if(i===undefined){
+      var nv=cs;
+      if(it){nv=_merge3Sess(it.base,it.data,cs);it.base=_jclone(cs);it.data=nv;it.seq=++_obSeq;obDirty=true;}
+      loc.push(nv);idx[cs.id]=loc.length-1;changed=true;return;
+    }
+    if(it){
+      if(_eqJ(it.base,cs))return;                    // nothing new in the cloud
+      var nd=_merge3Sess(it.base,it.data,cs);
+      it.base=_jclone(cs);it.data=nd;it.seq=++_obSeq;obDirty=true;
+      if(!_eqJ(loc[i],nd)){loc[i]=nd;changed=true;}
+      return;
+    }
+    if(legacyOn&&_legacyStranded(loc[i],cs)){
+      _obPut('session',cs.id,{base:cs,data:loc[i]});recovered++;
+      _logSync('Recovered truck '+(loc[i].truck||'')+' ('+(loc[i].date||'')+') from this device — uploading');
+      return;
+    }
+    if(!_eqJ(loc[i],cs)){loc[i]=cs;changed=true;}
+  });
+  // Deleted on another device: it was in the cloud before, is gone now, and this device has no unsent changes
+  if(complete){
+    var before=loc.length;
+    loc=loc.filter(function(s){
+      if(!s||!s.id||cloudIds[s.id]||pend[s.id]||_isSessOpen(s.id))return true;
+      return !seen[s.id];
+    });
+    if(loc.length!==before)changed=true;
+    if(legacyOn){try{localStorage.setItem('tl_legacy_rec_v2','1');}catch(e){}}
+  }
+  if(obDirty)_obSave();
+  if(seenChanged)SS('tl_seen_sess',seen);
+  if(changed)SS(K.SESSIONS,loc);
+  if(recovered)setTimeout(syncQueue,500);
+  return changed;
+}
+function _mergeProdFromCloud(cloudList,complete){
+  if(!Array.isArray(cloudList))return false;
+  if(_tabInactive)return false;
+  var deleted=getDeletedProd(),pend=_pendingIds('prod_entry'),pendDel=_pendingIds('prod_entry_delete');
+  var seen=LS('ms_seen_prod')||{},seenChanged=false,cloudIds={};
+  cloudList.forEach(function(e){if(e&&e.id){cloudIds[e.id]=1;if(complete&&!seen[e.id]){seen[e.id]=1;seenChanged=true;}}});
+  if(complete)_cloudProdIds=cloudIds;
+  var local=loadProdEntries(),merged={},order=[],remaps=_pendingRemaps();
+  cloudList.forEach(function(e){
+    if(!e||!e.id||deleted.indexOf(e.id)>=0||pendDel[e.id])return;
+    remaps.forEach(function(d){if(d.prod.indexOf(e.id)>=0){e=_jclone(e);_remapProd(e,d.src,d.tgt);}});
+    if(!(e.id in merged))order.push(e.id);merged[e.id]=e;
+  });
+  local.forEach(function(e){
+    if(!e||!e.id||deleted.indexOf(e.id)>=0||pendDel[e.id])return;
+    var cv=merged[e.id];
+    if(pend[e.id]){if(!cv)order.push(e.id);merged[e.id]=e;return;}   // unsent change on this device
+    if(!cv){
+      if(complete&&seen[e.id])return;            // deleted or replaced on another device — drop the stale copy
+      order.push(e.id);merged[e.id]=e;return;    // never seen in the cloud — keep (listed in Data health)
+    }
+    // otherwise the cloud copy wins
+  });
+  var out=order.map(function(id){return merged[id];});
+  if(seenChanged)SS('ms_seen_prod',seen);
+  var changed=JSON.stringify(out)!==JSON.stringify(local);
+  if(changed)SS(SK.PROD_ENTRIES,out);
+  return changed;
+}
+// Freight: the cloud list wins, except records this device is still uploading or deleting
+function _mergeRecordsFromCloud(key,type,cloudList){
+  if(!Array.isArray(cloudList))return false;
+  if(_tabInactive)return false;
+  var pend=_pendingIds(type),pendDel=_pendingIds(type+'_delete'),have={},out=[];
+  cloudList.forEach(function(e){if(!e||!e.id||have[e.id]||pendDel[e.id]||pend[e.id])return;have[e.id]=1;out.push(e);});
+  (LS(key)||[]).forEach(function(e){if(e&&e.id&&pend[e.id]&&!have[e.id]){have[e.id]=1;out.push(e);}});
+  SS(key,out);
+  return true;
+}
+// Single-document settings: never overwrite a local change that is still uploading
+var _DOC_TYPE_BY_KEY={'tl_u_m1':'users','tl_s_m1':'skus','tl_dest_m1':'destinations','ms_contractors':'contractors',
+  'ms_labour_rates':'labour_rates','ms_wip_readings':'wip_readings','ms_karigar_payments':'karigar_payments',
+  'ms_freight_settlements':'freight_settlements','ms_contractor_payments':'contractor_payments','ms_opening':'opening'};
+function _takeCloudDoc(key,val){
+  if(val===null||val===undefined)return false;
+  var t=_DOC_TYPE_BY_KEY[key];
+  if(t)_setCloudCount(t,_docCount(val));
+  if(t&&hasPQ(t,t))return false;
+  SS(key,val);return true;
+}
+
+// ═══ IS THIS DEVICE'S DATA COMPLETE? ═══
+// Closing stock is sent to the Orders app, and SKU delete/merge rewrite history, only
+// from a device that has confirmed it holds every truck and production entry.
+function _dataComplete(){
+  if(_storeEngine==='starting'||_storeErrAny()||_tabInactive)return false;
+  return !!(__sessLive.ok&&__prodLive.ok);
+}
+function _freshBanner(needs){
+  if(!(isAdmin()||isAccounts()))return '';
+  var p=[];
+  var se=_storeErrAny();if(se)p.push('this device could not save some data ('+se+')');
+  if(needs.indexOf('prod')>=0&&!__prodLive.ok)p.push('production entries not yet confirmed from the cloud'+(__prodLive.err?' ('+__prodLive.err+')':''));
+  if(needs.indexOf('sess')>=0&&!__sessLive.ok)p.push('loading sessions not yet confirmed from the cloud'+(__sessLive.err?' ('+__sessLive.err+')':''));
+  if(!p.length)return '';
+  return '<div class="sync-bar error" style="cursor:pointer;" onclick="openDataHealth()">⚠️ Figures may be incomplete — '+p.join('; ')+'. This page refreshes itself once the data arrives.</div>';
+}
+function _rerenderOpenReport(){
+  var a=document.querySelector('.screen.active'),id=a?a.id:'';
+  try{
+    if(id==='screen-contractor-report'){var o=document.getElementById('cr-report-output');if(o&&o.innerHTML.trim())renderContractorReport();}
+    else if(id==='screen-karigar-ledger')renderKarigarLedger();
+    else if(id==='screen-weight-report')renderWeightReport();
+    else if(id==='screen-stock-home'){var pl=document.getElementById('stock-ledger-panel');if(pl&&pl.style.display!=='none')renderStockLedger();}
+  }catch(e){console.warn('re-render failed',e);}
+}
+// A Firestore listener that errors is cancelled for good. Restart the live feeds once a minute
+// while signed in, so a passing quota/permission blip does not leave a PC stale until re-login.
+var _liveRetry=null;
+function _retryLiveSoon(){
+  if(_liveRetry)return;
+  _liveRetry=setTimeout(function(){_liveRetry=null;if(CU&&!_tabInactive&&(__sessLive.err||__prodLive.err)){_logSync('Restarting live sync');startCloudListener();}},60000);
+}
+function _skuUsage(id){
+  var s=0,p=0;
+  loadSessions().forEach(function(x){if((x.rowData||[]).some(function(r){return (r.entries||[]).some(function(e){return e.skuId==id;});}))s++;});
+  loadProdEntries().forEach(function(x){if((x.items||[]).some(function(it){return it.skuId==id;}))p++;});
+  return {sessions:s,prod:p};
+}
+
+
 // Pending queue
-function getPQ(){try{return JSON.parse(localStorage.getItem(K.PENDING))||[];}catch(e){return[];}}
-function setPQ(p){localStorage.setItem(K.PENDING,JSON.stringify(p));}
-function addPQ(type,id){const p=getPQ();if(!p.find(x=>x.type===type&&x.id===id))p.push({type,id});setPQ(p);}
-function delPQ(type,id){setPQ(getPQ().filter(x=>!(x.type===type&&x.id===id)));}
+// Push A: the upload queue is now the outbox (top of script) — same functions, each item carries its data
+function getPQ(){return _obAll().map(function(x){return {type:x.type,id:x.id,at:x.at,after:x.after,held:x.held};});}
+function setPQ(p){}   // kept for compatibility; nothing writes the old queue any more
+function addPQ(type,id,extra){return _obPut(type,id,extra||{});}
+function delPQ(type,id){var a=_obAll(),n=a.filter(function(x){return !(x.type===type&&x.id===id);});if(n.length!==a.length){_OB=n;_obSave();}}
 
 // Online/offline
 window.addEventListener('online',()=>{isOnline=true;setSyncBar('syncing','Back online — syncing...');syncQueue();});
@@ -1025,179 +1739,136 @@ function setSyncBar(state,msg){
   const icons={online:'✅',offline:'⚠️',syncing:'🔄',error:'❌'};
   const colors={online:'green',offline:'amber',syncing:'blue',error:'red'};
   const sb=document.getElementById('sync-bar');
-  if(sb)sb.innerHTML=`<div class="sync-bar ${state}"><span class="sdot" style="background:currentColor;opacity:.7;"></span>${icons[state]||''} ${msg}</div>`;
+  if(sb)sb.innerHTML=`<div class="sync-bar ${state}" style="cursor:pointer;" onclick="openDataHealth()"><span class="sdot" style="background:currentColor;opacity:.7;"></span>${icons[state]||''} ${msg}</div>`;
 }
 
+// Push A: one queue runner at a time; every item goes through _attemptItem, which
+// removes it only once Firebase confirms. Items are never dropped because a save
+// "failed" — they wait and retry (every 30 s, on reconnect, and when the app reopens).
+var _syncRunning=false;
 async function syncQueue(){
-  if(!fbOK||!isOnline)return;
-  const q=getPQ();if(!q.length){setSyncBar('online','Connected — all data synced');return;}
-  setSyncBar('syncing',`Syncing ${q.length} item(s)...`);
-  let fail=0;
-  for(const item of q){
-    try{
-      if(item.type==='session'){const s=loadSessions().find(x=>x.id===item.id);if(s){const ok=await window._fb.saveSession(s);if(ok)delPQ('session',item.id);else fail++;}else delPQ('session',item.id);}
-      else if(item.type==='users'){const ok=await window._fb.saveUsers(loadUsersLocal());if(ok)delPQ('users','users');else fail++;}
-      else if(item.type==='skus'){const ok=await window._fb.saveSKUs(loadSKUsLocal());if(ok)delPQ('skus','skus');else fail++;}
-      else if(item.type==='destinations'){const ok=await window._fb.saveDestinations(loadDestinationsLocal());if(ok)delPQ('destinations','destinations');else fail++;}
-      else if(item.type==='contractors'&&window._fb.saveContractors){const ok=await window._fb.saveContractors(loadContractors());if(ok)delPQ('contractors','contractors');else fail++;}
-      else if(item.type==='labour_rates'&&window._fb.saveLabourRates){const ok=await window._fb.saveLabourRates(loadLabourRates());if(ok)delPQ('labour_rates','labour_rates');else fail++;}
-      else if(item.type==='wip_readings'&&window._fb.saveWipReadings){const ok=await window._fb.saveWipReadings(loadWipReadings());if(ok)delPQ('wip_readings','wip_readings');else fail++;}
-      else if(item.type==='karigar_payments'&&window._fb.saveKarigarPayments){const ok=await window._fb.saveKarigarPayments(loadKarigarPayments());if(ok)delPQ('karigar_payments','karigar_payments');else fail++;}
-      else if(item.type==='freight_settlements'&&window._fb.saveFreightSettlements){const ok=await window._fb.saveFreightSettlements(loadFreightSettlements());if(ok)delPQ('freight_settlements','freight_settlements');else fail++;}
-      else if(item.type==='contractor_payments'&&window._fb.saveContractorPayments){const ok=await window._fb.saveContractorPayments(loadContractorPayments());if(ok)delPQ('contractor_payments','contractor_payments');else fail++;}
-      else if(item.type==='prod_entry'&&window._fb.saveProdEntry){const e=loadProdEntries().find(x=>x.id===item.id);if(e){const ok=await window._fb.saveProdEntry(e);if(ok)delPQ('prod_entry',item.id);else fail++;}else delPQ('prod_entry',item.id);}
-      else if(item.type==='opening'&&window._fb.saveOpeningStock){const ok=await window._fb.saveOpeningStock(loadOpeningStock());if(ok)delPQ('opening','opening');else fail++;}
-      else if(item.type==='freight_entry'&&window._fb.saveFreightEntry){const fe=loadFreightEntries().find(x=>x.id===item.id);if(fe){const ok=await window._fb.saveFreightEntry(fe);if(ok)delPQ('freight_entry',item.id);else fail++;}else delPQ('freight_entry',item.id);}
-      else if(item.type==='freight_payment'&&window._fb.saveFreightPayment){const fp=loadFreightPayments().find(x=>x.id===item.id);if(fp){const ok=await window._fb.saveFreightPayment(fp);if(ok)delPQ('freight_payment',item.id);else fail++;}else delPQ('freight_payment',item.id);}
-      else if(item.type==='freight_entry_delete'&&window._fb.deleteFreightEntry){const ok=await window._fb.deleteFreightEntry(item.id);if(ok)delPQ('freight_entry_delete',item.id);else fail++;}
-      else if(item.type==='freight_payment_delete'&&window._fb.deleteFreightPayment){const ok=await window._fb.deleteFreightPayment(item.id);if(ok)delPQ('freight_payment_delete',item.id);else fail++;}
-    }catch(e){fail++;}
-  }
-  if(fail)setSyncBar('error',`${fail} item(s) failed — will retry`);
-  else setSyncBar('online','Connected — all data synced');
+  try{await storeReady;}catch(e){}
+  if(_syncRunning||_tabInactive)return;
+  if(!fbOK||!isOnline||!window._fb){refreshSyncBar();return;}
+  _syncRunning=true;
+  try{
+    const q=getPQ();
+    for(const item of q){
+      try{await _attemptItem(item);}catch(e){_noteFail(item.type,false);}
+    }
+  }finally{_syncRunning=false;refreshSyncBar();}
 }
 
 // Track deleted session IDs locally so they don't reappear from cloud
 function getDeleted(){try{return JSON.parse(localStorage.getItem('tl_deleted_m1'))||[];}catch(e){return[];}}
-function addDeleted(id){var d=getDeleted();if(d.indexOf(id)<0){d.push(id);localStorage.setItem('tl_deleted_m1',JSON.stringify(d));}}
+function addDeleted(id){var d=getDeleted();if(d.indexOf(id)<0){d.push(id);try{localStorage.setItem('tl_deleted_m1',JSON.stringify(d));}catch(e){_storeKeyFail('tl_deleted_m1',e);}}}
 
+// Push A: each collection is refreshed independently — one failure no longer aborts
+// the rest (a full-storage error on sessions used to stop production entries loading).
 async function pullCloud(){
-  if(!fbOK||!isOnline)return;
-  try{
-    const cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
-    const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
-    const cd=await window._fb.loadDestinations();if(cd)SS(K.DESTINATIONS,cd);
-    const csess=await window._fb.loadSessions();
-    if(csess&&csess.length){
-      const loc=loadSessions();
-      const deleted=getDeleted();
-      const m={};
-      loc.forEach(function(s){m[s.id]=s;});
-      csess.forEach(function(s){
-        if(deleted.indexOf(s.id)>=0) return;
-        if(!isAdmin()&&!isAccounts()&&s.createdBy&&s.createdBy!==CU.username) return;
-        if(!m[s.id])m[s.id]=s;
-        else if(s.done)m[s.id]=s;
-      });
-      SS(K.SESSIONS,Object.values(m));
-    }
-    // Pull stock data — contractors, prod entries, opening stock
-    if(window._fb.loadContractors){
-      const cc=await window._fb.loadContractors();if(cc)SS(SK.CONTRACTORS,cc);
-    }
-    if(window._fb.loadLabourRates){
-      const clr=await window._fb.loadLabourRates();if(clr)SS(SK.LABOUR_RATES,clr);
-    }
-    if(window._fb.loadWipReadings){
-      const cw=await window._fb.loadWipReadings();if(cw)SS(SK.WIP,cw);
-    }
-    if(window._fb.loadKarigarPayments){
-      const ckp=await window._fb.loadKarigarPayments();if(ckp)SS(SK.KARIGAR_PAYMENTS,ckp);
-    }
-    if(window._fb.loadFreightSettlements){
-      const cfs=await window._fb.loadFreightSettlements();if(cfs)SS(SK.FREIGHT_SETTLEMENTS,cfs);
-    }
-    if(window._fb.loadContractorPayments){
-      const ccp=await window._fb.loadContractorPayments();if(ccp)SS(SK.CONTRACTOR_PAYMENTS,ccp);
-    }
-    if(window._fb.loadProdEntries){
-      const cp=await window._fb.loadProdEntries();
-      if(cp){
-        const deletedProd=getDeletedProd();
-        const local=loadProdEntries();
-        const merged={};
-        cp.forEach(function(e){if(deletedProd.indexOf(e.id)<0)merged[e.id]=e;});
-        local.forEach(function(e){
-          if(deletedProd.indexOf(e.id)>=0)return;
-          var cloudVer=merged[e.id];
-          var localTime=e.updatedAt||e.createdAt||'';
-          var cloudTime=cloudVer?(cloudVer.updatedAt||cloudVer.createdAt||''):'';
-          if(!cloudVer||localTime>cloudTime)merged[e.id]=e;
-        });
-        SS(SK.PROD_ENTRIES,Object.values(merged));
-      }
-    }
-    if(window._fb.loadOpeningStock){
-      const co=await window._fb.loadOpeningStock();if(co)SS(SK.OPENING,co);
-    }
-    if(window._fb.loadFreightEntries){
-      const cfe=await window._fb.loadFreightEntries();if(cfe)SS(K.FREIGHT_ENTRIES,cfe);
-    }
-    if(window._fb.loadFreightPayments){
-      const cfp=await window._fb.loadFreightPayments();if(cfp)SS(K.FREIGHT_PAYMENTS,cfp);
-    }
-    if(window._fb.loadDestinations){
-      const cdest=await window._fb.loadDestinations();if(cdest)SS(K.DESTINATIONS,cdest);
-    }
-  }catch(e){}
+  try{await storeReady;}catch(e){}
+  if(!fbOK||!isOnline||!window._fb)return;
+  var f=window._fb;
+  async function step(name,fn){try{await fn();}catch(e){_logSync('Refreshing '+name+' failed: '+_errText(e));}}
+  await step('users',async function(){_takeCloudDoc(K.USERS,await f.loadUsers());});
+  await step('SKUs',async function(){_takeCloudDoc(K.SKUS,await f.loadSKUs());});
+  await step('destinations',async function(){_takeCloudDoc(K.DESTINATIONS,await f.loadDestinations());});
+  await step('trucks',async function(){var cs=await f.loadSessions();if(cs&&cs.length)_mergeSessionsFromCloud(cs,true);});
+  if(f.loadContractors)await step('contractors',async function(){_takeCloudDoc(SK.CONTRACTORS,await f.loadContractors());});
+  if(f.loadLabourRates)await step('labour rates',async function(){_takeCloudDoc(SK.LABOUR_RATES,await f.loadLabourRates());});
+  if(f.loadWipReadings)await step('WIP readings',async function(){_takeCloudDoc(SK.WIP,await f.loadWipReadings());});
+  if(f.loadKarigarPayments)await step('karigar payments',async function(){_takeCloudDoc(SK.KARIGAR_PAYMENTS,await f.loadKarigarPayments());});
+  if(f.loadFreightSettlements)await step('freight settlements',async function(){_takeCloudDoc(SK.FREIGHT_SETTLEMENTS,await f.loadFreightSettlements());});
+  if(f.loadContractorPayments)await step('contractor payments',async function(){_takeCloudDoc(SK.CONTRACTOR_PAYMENTS,await f.loadContractorPayments());});
+  if(f.loadProdEntries)await step('production entries',async function(){var cp=await f.loadProdEntries();if(cp)_mergeProdFromCloud(cp,true);});
+  if(f.loadOpeningStock)await step('opening stock',async function(){_takeCloudDoc(SK.OPENING,await f.loadOpeningStock());});
+  if(f.loadFreightEntries)await step('freight trips',async function(){var x=await f.loadFreightEntries();if(x)_mergeRecordsFromCloud(K.FREIGHT_ENTRIES,'freight_entry',x);});
+  if(f.loadFreightPayments)await step('freight payments',async function(){var x=await f.loadFreightPayments();if(x)_mergeRecordsFromCloud(K.FREIGHT_PAYMENTS,'freight_payment',x);});
+  refreshSyncBar();
+  syncQueue();
 }
 
 function startCloudListener(){
-  if(!fbOK||!isOnline||!CU)return;
+  if(!fbOK||!isOnline||!CU||_tabInactive)return;
   if(fbListener){fbListener();fbListener=null;}
-  fbListener=window._fb.listenAll(function(allSessions){
-    if(!allSessions.length)return;
-    const deleted=getDeleted();
-    const loc=loadSessions();let changed=false;
-    allSessions.forEach(function(cs){
-      if(deleted.indexOf(cs.id)>=0) return;
-      // Non-admin/accounts users only sync their own sessions
-      if(!isAdmin()&&!isAccounts()){
-        if(cs.createdBy&&cs.createdBy!==CU.username) return;
+  __sessLive={ok:false,at:0,err:''};
+  if(_sessMergeTimer){clearTimeout(_sessMergeTimer);_sessMergeTimer=null;}
+  _sessLatest=null;
+  fbListener=window._fb.listenAll(function(getAll,fromCache){
+    // Every save on any phone fires a snapshot holding the FULL list, so in a burst only the
+    // latest needs merging. The first one is merged at once; later ones within 250 ms are batched.
+    _sessLatest={getAll:getAll,fromCache:fromCache};
+    if(_sessMergeTimer)return;
+    _sessMergeTimer=setTimeout(function(){
+      _sessMergeTimer=null;var snap=_sessLatest;_sessLatest=null;if(!snap||!CU)return;
+      var first=!__sessLive.ok,changed=false,all=snap.getAll();
+      if(all.length){
+        try{changed=_mergeSessionsFromCloud(all,!snap.fromCache);}
+        catch(e){console.error('session merge failed',e);_logSync('Truck merge failed: '+_errText(e));}
       }
-      const i=loc.findIndex(function(s){return s.id===cs.id;});
-      if(i<0){loc.push(cs);changed=true;}
-      else{
-        if(cs.done&&!loc[i].done){loc[i]=cs;changed=true;}
-        else if(!cs.done&&!loc[i].done){loc[i]=cs;changed=true;}
-        else if(cs.done&&loc[i].done){loc[i]=cs;changed=true;}
-      }
-    });
-    if(changed){
-      SS(K.SESSIONS,loc);
-      renderHome();
-    }
+      if(!snap.fromCache)__sessLive={ok:true,at:Date.now(),err:''};
+      if(changed){try{renderHome();}catch(e){}}
+      refreshSyncBar();
+      if(first&&__sessLive.ok)_rerenderOpenReport();
+    },__sessLive.ok?250:0);
+  },function(e){
+    __sessLive={ok:false,at:Date.now(),err:(e&&e.code)||'error'};
+    _logSync('Live truck sync stopped: '+__sessLive.err);refreshSyncBar();_retryLiveSoon();
   });
   // Live listener for freight entries — so changes by other users (e.g. accountant) sync instantly
   if(fbFreightListener){fbFreightListener();fbFreightListener=null;}
   if(window._fb.listenFreight){
     fbFreightListener=window._fb.listenFreight(function(allEntries){
-      // Deduplicate by id before saving — last-write-wins for same id
-      var seen={};
-      var deduped=[];
-      allEntries.forEach(function(e){if(e.id&&!seen[e.id]){seen[e.id]=true;deduped.push(e);}});
-      SS(K.FREIGHT_ENTRIES,deduped);
+      // Cloud list wins, but trips this device is still uploading are kept
+      _mergeRecordsFromCloud(K.FREIGHT_ENTRIES,'freight_entry',allEntries);
       // Refresh pending freight panel if Add Trip tab is active and date is set
       if(freightTab==='add'){
         var pd=document.getElementById('ft-pending-date');
         if(pd&&pd.value)renderPendingFreight(pd.value);
       }
-      // Data already fresh in localStorage from listener — call render directly
+      // Data already fresh from listener — call render directly
       if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
         _renderTruckLedger();
       if(freightTab==='ledger'&&ledgerView==='date'){
         var fdDate=document.getElementById('fl-date-input');
         if(fdDate&&fdDate.value)_renderDateLedger();
       }
-    });
+    },function(e){_logSync('Live freight sync stopped: '+((e&&e.code)||'error'));});
   }
   // Live listener for freight payments
   if(fbPayListener){fbPayListener();fbPayListener=null;}
   if(window._fb.listenFreightPayments){
     fbPayListener=window._fb.listenFreightPayments(function(allPayments){
-      SS(K.FREIGHT_PAYMENTS,allPayments);
-      // Data already fresh in localStorage from listener — call render directly
+      _mergeRecordsFromCloud(K.FREIGHT_PAYMENTS,'freight_payment',allPayments);
       if(freightTab==='ledger'&&ledgerView==='truck'&&window._ftTruck)
         _renderTruckLedger();
+    },function(e){_logSync('Live payment sync stopped: '+((e&&e.code)||'error'));});
+  }
+  // Push A: live production entries on admin/accounts devices (reports, stock, Orders snapshot)
+  if(fbProdListener){fbProdListener();fbProdListener=null;}
+  __prodLive={ok:false,at:0,err:''};
+  if((isAdmin()||isAccounts())&&window._fb.listenProdEntries){
+    fbProdListener=window._fb.listenProdEntries(function(list,fromCache){
+      var first=!__prodLive.ok;
+      try{_mergeProdFromCloud(list,!fromCache);}
+      catch(e){console.error('production merge failed',e);_logSync('Production merge failed: '+_errText(e));}
+      if(!fromCache)__prodLive={ok:true,at:Date.now(),err:''};
+      refreshSyncBar();
+      if(first&&__prodLive.ok)_rerenderOpenReport();
+    },function(e){
+      __prodLive={ok:false,at:Date.now(),err:(e&&e.code)||'error'};
+      _logSync('Live production sync stopped: '+__prodLive.err);refreshSyncBar();_retryLiveSoon();
     });
   }
 }
 
-function LS(k){try{return JSON.parse(localStorage.getItem(k));}catch(e){return null;}}
-function SS(k,v){localStorage.setItem(k,JSON.stringify(v));}
+// Push A: same signatures as before. The four big lists live in IndexedDB (via _MEM, see top of
+// script); everything else stays in localStorage exactly as it was. Save failures are shown, not swallowed.
+function LS(k){var s;if(_IDB_KEYS[k]){s=_MEM[k];if(s===undefined){try{s=localStorage.getItem(k);}catch(e){s=null;}}}else{try{s=localStorage.getItem(k);}catch(e){s=null;}}if(s===null||s===undefined)return null;try{return JSON.parse(s);}catch(e){return null;}}
+function SS(k,v){if(_tabInactive)return;var s;try{s=JSON.stringify(v);}catch(e){_storeKeyFail(k,e);return;}if(s===undefined)s='null';if(_IDB_KEYS[k]){_MEM[k]=s;_persistKey(k);return;}try{localStorage.setItem(k,s);_storeKeyOk(k);}catch(e){_storeKeyFail(k,e);}}
 function loadUsersLocal(){const u=LS(K.USERS);if(u&&u.length)return u;const d=[{id:'admin',username:'admin',pin:'1234',role:'admin'}];SS(K.USERS,d);return d;}
 function loadUsers(){return loadUsersLocal();}
-async function saveUsersSmart(u){SS(K.USERS,u);if(fbOK&&isOnline){const ok=await window._fb.saveUsers(u);if(!ok)addPQ('users','users');}else addPQ('users','users');}
+async function saveUsersSmart(u){SS(K.USERS,u);return cloudSaveDoc('users');}
 function saveUsers(u){SS(K.USERS,u);saveUsersSmart(u);}
 function loadSKUsLocal(){return LS(K.SKUS)||[{id:1,name:'Kala Bhoot',unit:'bag'},{id:2,name:'Kuch Kuch',unit:'box'},{id:3,name:'Sev Dana',unit:'box'},{id:4,name:'Makeup Box',unit:'bag'},{id:5,name:'Aloo Bhujia',unit:'box'},{id:6,name:'Dilkush',unit:'bag'}];}
 function loadSKUs(){return loadSKUsLocal();}
@@ -1243,10 +1914,10 @@ async function setProdCat(id,cat){
   if(cat) sk.prodCat=cat; else delete sk.prodCat;
   saveSKUs(skus); renderSKUs(); renderProdCatReview();
 }
-async function saveSKUsSmart(s){SS(K.SKUS,s);if(fbOK&&isOnline){const ok=await window._fb.saveSKUs(s);if(!ok)addPQ('skus','skus');}else addPQ('skus','skus');}
+async function saveSKUsSmart(s){SS(K.SKUS,s);return cloudSaveDoc('skus');}
 function saveSKUs(s){SS(K.SKUS,s);saveSKUsSmart(s);}
 function loadDestinationsLocal(){return LS(K.DESTINATIONS)||[];}
-async function saveDestinationsSmart(d){SS(K.DESTINATIONS,d);if(fbOK&&isOnline&&window._fb){const ok=await window._fb.saveDestinations(d);if(!ok)addPQ('destinations','destinations');}else addPQ('destinations','destinations');}
+async function saveDestinationsSmart(d){SS(K.DESTINATIONS,d);return cloudSaveDoc('destinations');}
 function saveDestinations(d){SS(K.DESTINATIONS,d);saveDestinationsSmart(d);}
 // ─── Destination autocomplete (works on all devices/browsers) ───────────────
 function destSearch(inputId, listId){
@@ -1339,9 +2010,10 @@ function initLogin(){
   var le=document.getElementById('login-error');if(le)le.textContent='';
   var lu=document.getElementById('login-username');if(lu)lu.value='';
   var ls=document.getElementById('login-sync');
-  if(ls)ls.textContent=(isOnline&&fbOK)?'🟢 Connected to cloud':'🟡 Offline mode — using local data';
+  if(ls)ls.textContent=((isOnline&&fbOK)?'🟢 Connected to cloud':'🟡 Offline mode — using local data')+' · '+APP_BUILD;
 }
 async function doLogin(){
+  try{await storeReady;}catch(e){}   // Push A: device data must be loaded before anything reads it
   var u = document.getElementById('login-username').value.trim().toLowerCase();
   var p = window.pinLogin || '';
   var errEl = document.getElementById('login-error');
@@ -1353,9 +2025,9 @@ async function doLogin(){
   // First pull users/SKUs only (not sessions) to get latest user list
   if(fbOK&&isOnline&&window._fb){
     try{
-      const cu=await window._fb.loadUsers();if(cu)SS(K.USERS,cu);
-      const cs=await window._fb.loadSKUs();if(cs)SS(K.SKUS,cs);
-      const cd=await window._fb.loadDestinations();if(cd)SS(K.DESTINATIONS,cd);
+      _takeCloudDoc(K.USERS,await window._fb.loadUsers());
+      _takeCloudDoc(K.SKUS,await window._fb.loadSKUs());
+      _takeCloudDoc(K.DESTINATIONS,await window._fb.loadDestinations());
     }catch(e){}
   }
 
@@ -1380,12 +2052,25 @@ async function doLogin(){
   pullCloud().catch(function(){});
 }
 function doLogout(){
-  // Clear sessions from localStorage on logout — prevents other users seeing this user's sessions
-  SS(K.SESSIONS,[]);
-  CU=null;editRowIdx=-1;liveRows=[];
+  // Push A: signing out used to wipe every truck on the device — including finished trucks
+  // that had not uploaded yet. Anything still waiting to upload now stays and keeps uploading.
+  var pend=getPQ().length;
+  if(pend&&!confirm(pend+' change(s) on this device have not reached the cloud yet.\n\nThey stay safely on this device and keep uploading automatically — even after you sign out.\n\nSign out now?'))return;
+  var keep=_pendingIds('session'),who=CU?CU.username:null;
+  try{
+    SS(K.SESSIONS,loadSessions().filter(function(s){
+      if(keep[s.id])return true;
+      // finished on this phone but never confirmed in the cloud (left behind by the old upload bug)
+      return !!(who&&s.createdBy===who&&s.done&&s.synced!==true&&!(_cloudSessIds&&_cloudSessIds[s.id]===2));
+    }));
+  }catch(e){console.error('logout cleanup failed',e);}
+  CU=null;editRowIdx=-1;liveRows=[];_liveBase=[];
   if(fbListener){fbListener();fbListener=null;}
   if(fbFreightListener){fbFreightListener();fbFreightListener=null;}
   if(fbPayListener){fbPayListener();fbPayListener=null;}
+  if(fbProdListener){fbProdListener();fbProdListener=null;}
+  if(_sessMergeTimer){clearTimeout(_sessMergeTimer);_sessMergeTimer=null;}_sessLatest=null;
+  __sessLive={ok:false,at:0,err:''};__prodLive={ok:false,at:0,err:''};
   stopTimer();stopAutoSave();
   goTo('screen-login');initLogin();
 }
@@ -1644,10 +2329,7 @@ function renderHome(){
   document.getElementById('topbar-name').textContent=CU?CU.username:'';
   const dot=document.getElementById('topbar-dot');
   if(dot)dot.className='role-dot '+(isAdmin()?'admin':isAccounts()?'accounts':isProduction()?'production':'user');
-  const pend=getPQ().length;
-  if(isOnline&&fbOK&&!pend)setSyncBar('online','Connected — all data synced across devices');
-  else if(isOnline&&fbOK&&pend)setSyncBar('syncing',`Syncing ${pend} item(s)...`);
-  else setSyncBar('offline','Offline — changes will sync when connected');
+  refreshSyncBar();   // Push A: honest status — pending count, upload errors, storage problems
   // Admin panel button — admin only
   document.getElementById('admin-bar').innerHTML=isAdmin()?
     '<div style="display:flex;gap:8px;margin-bottom:12px;">'+
@@ -1912,6 +2594,10 @@ function addSKU(){
   document.getElementById('new-sku-name').value='';document.getElementById('new-sku-unit').value='';renderSKUs();
 }
 function deleteSKU(id){
+  // Push A: removing an SKU that old records use hides those quantities from every report and the stock ledger
+  if(!_dataComplete()){alert('This device has not yet confirmed it holds every truck and production entry, so it cannot check whether this SKU is still used.\n\nWait for the green sync bar and try again.');return;}
+  var used=_skuUsage(id);
+  if(used.sessions||used.prod){alert('This SKU is used in '+used.sessions+' loading session(s) and '+used.prod+' production entr(ies).\n\nRemoving it would hide those quantities from every report and the stock ledger.\n\nUse "Disable" to stop it being picked for new entries, or Merge it into another SKU.');return;}
   showModal('Remove SKU','Remove this SKU from master list?',function(){
     var updated=loadSKUs().filter(function(s){return s.id!==id;});
     saveSKUs(updated);
@@ -1989,14 +2675,19 @@ function deleteDestination(id){
   saveDestinations(dests);renderDestinations();
 }
 function getSess(id){return loadSessions().find(s=>s.id===id);}
-function saveSess(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id);if(i>=0)ss[i]=sess;else ss.push(sess);saveSessions(ss);}
-function persistLive(){const s=getSess(curSessId);if(!s)return;s.rowData=clone(liveRows);saveSess(s);}
+function _saveSessLocal(sess){const ss=loadSessions(),i=ss.findIndex(s=>s.id===sess.id);if(i>=0)ss[i]=sess;else ss.push(sess);saveSessions(ss);}
+// Push A: every change to a truck made on this device is queued for upload, remembering the
+// version it started from, so the upload merges with other devices' changes instead of overwriting them.
+function saveSess(sess){var p=_findRec(K.SESSIONS,sess.id);p=p?_jclone(p):null;if(p&&_eqJ(p,sess))return;_saveSessLocal(sess);_enqueueSession(sess.id,p);}
+// Push A: writes only the rows changed on THIS screen (compared with what the screen loaded), so a
+// screen showing an older copy never overwrites rows another device added or a truck finished elsewhere.
+function persistLive(){const s=getSess(curSessId);if(!s)return false;const cur=s.rowData||[];const nr=_mergeRows(_liveBase,clone(liveRows),cur);_liveBase=clone(liveRows);if(JSON.stringify(nr)===JSON.stringify(cur))return false;s.rowData=nr;s.updatedAt=_nowIso();saveSess(s);return true;}
 
 // Push active session progress to Firebase (for admin visibility + offline safety)
 function cloudSaveProgress(){
-  if(!fbOK||!isOnline||!window._fb)return;
-  const s=getSess(curSessId);if(!s||s.done)return;
-  window._fb.saveSession(s).catch(function(){});
+  if(!curSessId)return;
+  const s=getSess(curSessId);if(!s)return;
+  cloudSaveRecord('session',curSessId);   // Push A: sends the queued change (if any), retried until confirmed
 }
 
 // Auto-save every 2 minutes during active loading
@@ -2004,7 +2695,7 @@ let autoSaveTimer=null;
 function startAutoSave(){
   stopAutoSave();
   autoSaveTimer=setInterval(function(){
-    if(curSessId){persistLive();cloudSaveProgress();}
+    if(curSessId&&persistLive())cloudSaveProgress();
   },120000); // 2 minutes
 }
 function stopAutoSave(){if(autoSaveTimer){clearInterval(autoSaveTimer);autoSaveTimer=null;}}
@@ -2014,9 +2705,7 @@ function confirmDel(id,truck){
     saveSessions(loadSessions().filter(function(s){return s.id!==id;}));
     renderHome();
     // Delete from Firebase cloud
-    if(fbOK&&isOnline&&window._fb){
-      window._fb.deleteSession(id).catch(function(e){console.warn('Firebase delete failed:',e);});
-    }
+    cloudDeleteRecord('session',id);   // Push A: queued, retried until confirmed
   });
 }
 function startEditSess(id,fromLoading){
@@ -2054,13 +2743,11 @@ function saveEditSession(){
   if(!s.incharge){alert('Loading incharge name is required.');return;}
   if(!/^[A-Za-z ]+$/.test(s.incharge)){alert('Loading incharge name must contain letters only.');return;}
   if(!s.dest){alert('Destination is required.');return;}
-  s.synced=false;
+  s.synced=false;s.updatedAt=_nowIso();
   saveSess(s);
-  if(fbOK&&isOnline&&window._fb){
-    window._fb.saveSession(s).catch(function(){addPQ('session',s.id);});
-  } else { addPQ('session',s.id); }
+  cloudSaveRecord('session',s.id);
   var fl=editFromLoading;editSessId=null;editFromLoading=false;
-  if(fl){liveRows=clone(getSess(curSessId).rowData);renderLoading(curSessId);goTo('screen-loading');startAutoSave();}else{goTo('screen-home');}
+  if(fl){liveRows=clone(getSess(curSessId).rowData);_liveBase=clone(liveRows);renderLoading(curSessId);goTo('screen-loading');startAutoSave();}else{goTo('screen-home');}
 }
 function selectTruck(type){
   truckType=type;
@@ -2089,21 +2776,19 @@ function createSession(){
   }
   if(document.getElementById('ns-dest-err'))document.getElementById('ns-dest-err').style.display='none';
   const id='S'+Date.now(),rowData=Array.from({length:rows},(_,i)=>({row:i+1,entries:[]}));
-  const newSess={id,date,truck,driver,driverMobile:driverMobile||'',incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false};
+  const newSess={id,date,truck,driver,driverMobile:driverMobile||'',incharge,dest,rows,truckType,rowData,done:false,startTime:new Date().toISOString(),endTime:null,createdBy:CU.username,synced:false,updatedAt:_nowIso()};
   const ss=loadSessions();ss.push(newSess);saveSessions(ss);
-  if(fbOK&&isOnline&&window._fb){
-    window._fb.saveSession(newSess).catch(function(){addPQ('session',id);});
-  } else { addPQ('session',id); }
-  curSessId=id;editRowIdx=-1;liveRows=clone(rowData);renderLoading(id);goTo('screen-loading');startAutoSave();
+  _enqueueSession(id,null);cloudSaveRecord('session',id);
+  curSessId=id;editRowIdx=-1;liveRows=clone(rowData);_liveBase=clone(liveRows);renderLoading(id);goTo('screen-loading');startAutoSave();
 }
 function openSession(id){
   curSessId=id;editRowIdx=-1;const s=getSess(id);
   if(s.done){
     if(!canViewCompleted()){alert('Only admins and accounts can view completed reports.');return;}
-    liveRows=clone(s.rowData);renderSummary(id);goTo('screen-summary');
+    liveRows=clone(s.rowData);_liveBase=clone(liveRows);renderSummary(id);goTo('screen-summary');
   } else {
     if(isAccounts()){alert('Accounts role cannot access active loading sessions.');return;}
-    liveRows=clone(s.rowData);renderLoading(id);goTo('screen-loading');startAutoSave();
+    liveRows=clone(s.rowData);_liveBase=clone(liveRows);renderLoading(id);goTo('screen-loading');startAutoSave();
   }
 }
 
@@ -2129,6 +2814,7 @@ function renderLoading(id){
       <div style="font-size:13px;color:var(--text-secondary);">${s.driver}${s.incharge?' · IC: <b>'+s.incharge+'</b>':''} · ${s.date}</div>
       ${s.dest?`<div style="font-size:12px;color:var(--blue);margin-top:2px;">→ ${s.dest}</div>`:'<div style="font-size:12px;color:var(--red);margin-top:2px;">⚠️ No destination set</div>'}
       ${s.startTime?`<div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Started: <b>${fmt12(s.startTime)}</b></div>`:''}
+      <div id="loading-sync-line" style="font-size:11px;margin-top:4px;">${_loadingSyncLine()}</div>
     </div>`;
   document.getElementById('elapsed-display').innerHTML=elHTML(s);
   startTimer(id);
@@ -2273,7 +2959,9 @@ function cancelEditRow(ri){liveRows[ri].entries=clone(editRowSnap);editRowSnap=n
 function saveEditRow(ri){
   flushDOM(ri);const v=liveRows[ri].entries.filter(e=>e.skuId&&parseFloat(e.qty)>0);
   if(!v.length){alert(`Row ${ri+1} must have at least one SKU.`);return;}
-  liveRows[ri].entries=v;persistLive();editRowSnap=null;editRowIdx=-1;renderLoading(curSessId);
+  liveRows[ri].entries=v;persistLive();editRowSnap=null;editRowIdx=-1;
+  cloudSaveProgress();   // Push A: a corrected row used to stay on the phone only, and was then overwritten
+  renderLoading(curSessId);
 }
 // ═══════════════════════════════════════════════════════
 // WEIGHT SNAPSHOT AT DISPATCH
@@ -2311,21 +2999,27 @@ async function finaliseSession(){
   const s=getSess(curSessId);
   if(!s){alert('Session not found. Please go back and try again.');return;}
   try{ _stampEntryWeights(s); }catch(e){}
-  s.done=true;s.endTime=new Date().toISOString();s.synced=false;
+  s.done=true;s.endTime=new Date().toISOString();s.synced=false;s.updatedAt=_nowIso();
   saveSess(s);stopTimer();stopAutoSave();editRowIdx=-1;
+  // Push A: queued BEFORE uploading, so a dead connection, a closed app or Sign out can no
+  // longer lose a finished truck. Waits at most 15 s, then carries on and retries in the background.
+  addPQ('session',s.id);
   setSyncBar('syncing','Uploading completed session to cloud...');
-  if(fbOK&&isOnline&&window._fb){
-    try{
-      const ok=await window._fb.saveSession(Object.assign({},s,{synced:true}));
-      if(ok){s.synced=true;saveSess(s);setSyncBar('online','✅ Uploaded — admin can now view the report');}
-      else{addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
-    }catch(e){addPQ('session',s.id);setSyncBar('offline','⚠️ Upload failed — will retry when connected');}
-  }else{addPQ('session',s.id);setSyncBar('offline','📱 Saved locally — will upload when back online');}
+  const res=await withTimeout(_attemptItem({type:'session',id:s.id}),15000);
+  if(res==='ok')setSyncBar('online','✅ Uploaded — admin can now view the report');
+  else if(res==='offline')setSyncBar('offline','📱 Saved on this phone — will upload automatically when back online');
+  else setSyncBar('offline','📱 Saved on this phone — upload pending, retrying automatically');
   renderSummary(curSessId);goTo('screen-summary');
 }
 function backToLoading(){
-  const s=getSess(curSessId);s.done=false;s.endTime=null;saveSess(s);
-  editRowIdx=-1;liveRows=clone(s.rowData);renderLoading(curSessId);goTo('screen-loading');startAutoSave();
+  const s=getSess(curSessId);
+  // Push A: "← Back to loading" on a finished truck re-opens it. Admin/accounts reach this link
+  // while just viewing a report, so confirm first (accounts cannot edit active trucks at all).
+  if(s&&s.done&&(isAdmin()||isAccounts())){
+    if(isAccounts()||!confirm('Re-open this finished truck for editing?\n\nIt drops out of Completed and the stock ledger until it is finalised again.')){goTo('screen-home');return;}
+  }
+  s.done=false;s.endTime=null;s.updatedAt=_nowIso();saveSess(s);
+  editRowIdx=-1;liveRows=clone(s.rowData);_liveBase=clone(liveRows);renderLoading(curSessId);goTo('screen-loading');startAutoSave();
 }
 
 // Summary
@@ -2520,7 +3214,7 @@ const SK={
   FREIGHT_SETTLEMENTS:'ms_freight_settlements'
 };
 
-var stockViewDate=new Date().toISOString().split('T')[0];
+var stockViewDate=_istToday();
 var stockCurrentTab='production';
 var prodStockSKUs=[{skuId:'',qty:''}];
 var stockSortOrder='alpha'; // 'alpha', 'high', 'low'
@@ -2530,32 +3224,28 @@ var editFromReport=false;
 function loadProdEntries(){return LS(SK.PROD_ENTRIES)||[];}
 function saveProdEntries(e){SS(SK.PROD_ENTRIES,e);}
 function getDeletedProd(){try{return JSON.parse(localStorage.getItem('ms_deleted_prod'))||[];}catch(e){return[];}}
-function addDeletedProd(id){var d=getDeletedProd();if(d.indexOf(id)<0){d.push(id);localStorage.setItem('ms_deleted_prod',JSON.stringify(d));}}
+function addDeletedProd(id){var d=getDeletedProd();if(d.indexOf(id)<0){d.push(id);try{localStorage.setItem('ms_deleted_prod',JSON.stringify(d));}catch(e){_storeKeyFail('ms_deleted_prod',e);}}}
 function loadOpeningStock(){return LS(SK.OPENING)||{};}
 function saveOpeningStockData(o){
   SS(SK.OPENING,o);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveOpeningStock)window._fb.saveOpeningStock(o);
-  else addPQ('opening','opening');
+  cloudSaveDoc('opening');   // Push A: queued first, retried until confirmed
 }
 function loadLabourRates(){return LS(SK.LABOUR_RATES)||[];}
 function saveLabourRates(r){
   SS(SK.LABOUR_RATES,r);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveLabourRates)window._fb.saveLabourRates(r);
-  else addPQ('labour_rates','labour_rates');
+  cloudSaveDoc('labour_rates');   // Push A: queued first, retried until confirmed
 }
 function loadContractorPayments(){return LS(SK.CONTRACTOR_PAYMENTS)||[];}
 function loadWipReadings(){return LS(SK.WIP)||[];}
 function saveWipReadings(w){
   SS(SK.WIP,w);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveWipReadings)window._fb.saveWipReadings(w);
-  else addPQ('wip_readings','wip_readings');
+  cloudSaveDoc('wip_readings');   // Push A: queued first, retried until confirmed
 }
 function loadKarigarPayments(){return LS(SK.KARIGAR_PAYMENTS)||[];}
 function loadFreightSettlements(){return LS(SK.FREIGHT_SETTLEMENTS)||[];}
 function saveFreightSettlements(s){
   SS(SK.FREIGHT_SETTLEMENTS,s);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightSettlements)window._fb.saveFreightSettlements(s);
-  else addPQ('freight_settlements','freight_settlements');
+  cloudSaveDoc('freight_settlements');   // Push A: queued first, retried until confirmed
 }
 // The most recent settlement for a truck — what the accountant needs to see first.
 function lastFreightSettlement(truck){
@@ -2573,13 +3263,11 @@ function freightDateSettled(truck,dateStr,which){
 }
 function saveKarigarPayments(p){
   SS(SK.KARIGAR_PAYMENTS,p);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveKarigarPayments)window._fb.saveKarigarPayments(p);
-  else addPQ('karigar_payments','karigar_payments');
+  cloudSaveDoc('karigar_payments');   // Push A: queued first, retried until confirmed
 }
 function saveContractorPayments(p){
   SS(SK.CONTRACTOR_PAYMENTS,p);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveContractorPayments)window._fb.saveContractorPayments(p);
-  else addPQ('contractor_payments','contractor_payments');
+  cloudSaveDoc('contractor_payments');   // Push A: queued first, retried until confirmed
 }
 
 // Rate in force for a contractor + SKU on a given date.
@@ -2606,8 +3294,7 @@ function isKarigar(c){ return contractorType(c)==='production'; }
 function karigarContractors(){ return loadContractors().filter(isKarigar); }
 function saveContractors(c){
   SS(SK.CONTRACTORS,c);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveContractors)window._fb.saveContractors(c);
-  else addPQ('contractors','contractors');
+  cloudSaveDoc('contractors');   // Push A: queued first, retried until confirmed
 }
 
 // Save/load stock data to Firebase
@@ -2704,6 +3391,9 @@ function publishClosingStockSnapshot(){
   try{
     if(!CU||!(isAdmin()||isAccounts()))return;
     if(!fbOK||!isOnline)return;
+    // Push A: never send closing stock computed from incomplete data (a full-storage PC
+    // with zero production entries used to send every SKU negative to the Orders app)
+    if(!_dataComplete()){_logSync('Closing stock NOT sent to Orders — this device has not confirmed it holds every truck and production entry');return;}
     var yd=_yesterdayIST();
     var stock=calcStockForDate(yd);
     var out={};
@@ -2716,7 +3406,7 @@ function publishClosingStockSnapshot(){
 function printStockStatement(){
   var stock=calcStockForDate(stockViewDate);
   var skus=loadSKUsLocal();
-  var today=new Date().toISOString().split('T')[0];
+  var today=_istToday();
 
   // Apply same sort
   var rows=skus.map(function(sk){
@@ -2790,10 +3480,7 @@ function renderStockHome(){
   if(nm)nm.textContent=CU.username;
 
   // Sync bar
-  var sb=document.getElementById('stock-sync-bar');
-  if(sb)sb.innerHTML=(isOnline&&fbOK)?
-    '<div class="sync-bar online" style="margin-bottom:10px;">✅ Connected</div>':
-    '<div class="sync-bar offline" style="margin-bottom:10px;">⚠️ Offline</div>';
+  refreshSyncBar();   // Push A: same honest status bar as the home screen
 
   // Switch bar — back to Loading for non-production
   var swBar=document.getElementById('stock-switch-bar');
@@ -2810,7 +3497,7 @@ function renderStockHome(){
     document.getElementById('stock-dashboard').style.display='none';
     // Refresh contractors list for the form
     if(fbOK&&isOnline&&window._fb&&window._fb.loadContractors){
-      window._fb.loadContractors().then(function(r){if(r)SS(SK.CONTRACTORS,r);});
+      window._fb.loadContractors().then(function(r){_takeCloudDoc(SK.CONTRACTORS,r);});
     }
     renderTodayProdEntries();
   } else if(isAdmin()||isAccounts()){
@@ -2819,23 +3506,11 @@ function renderStockHome(){
     // Pull latest stock data from cloud
     if(fbOK&&isOnline&&window._fb){
       Promise.all([
-        window._fb.loadContractors&&window._fb.loadContractors().then(function(r){if(r)SS(SK.CONTRACTORS,r);}),
+        window._fb.loadContractors&&window._fb.loadContractors().then(function(r){_takeCloudDoc(SK.CONTRACTORS,r);}),
         window._fb.loadProdEntries&&window._fb.loadProdEntries().then(function(cloudEntries){
-          if(!cloudEntries)return;
-          var deletedProd=getDeletedProd();
-          var local=loadProdEntries();
-          var merged={};
-          cloudEntries.forEach(function(e){if(deletedProd.indexOf(e.id)<0)merged[e.id]=e;});
-          local.forEach(function(e){
-            if(deletedProd.indexOf(e.id)>=0)return;
-            var cloudVer=merged[e.id];
-            var localTime=e.updatedAt||e.createdAt||'';
-            var cloudTime=cloudVer?(cloudVer.updatedAt||cloudVer.createdAt||''):'';
-            if(!cloudVer||localTime>cloudTime)merged[e.id]=e;
-          });
-          SS(SK.PROD_ENTRIES,Object.values(merged));
+          if(cloudEntries)_mergeProdFromCloud(cloudEntries,true);   // Push A: shared merge (keeps unsent entries, drops ones deleted elsewhere)
         }),
-        window._fb.loadOpeningStock&&window._fb.loadOpeningStock().then(function(r){if(r)SS(SK.OPENING,r);}),
+        window._fb.loadOpeningStock&&window._fb.loadOpeningStock().then(function(r){_takeCloudDoc(SK.OPENING,r);}),
       ]).then(function(){renderStockDashboard();}).catch(function(){renderStockDashboard();});
     } else {
       renderStockDashboard();
@@ -2845,7 +3520,7 @@ function renderStockHome(){
 }
 
 function renderTodayProdEntries(){
-  var today=new Date().toISOString().split('T')[0];
+  var today=_istToday();
   var entries=loadProdEntries().filter(function(e){return e.date===today&&e.createdBy===CU.username;});
   var skus=loadSKUsLocal();
   var el=document.getElementById('prod-today-list');
@@ -2881,7 +3556,7 @@ function toggleStockLedger(){
 
 function stockPickDate(val){if(val){stockViewDate=val;renderStockLedger();}}
 function stockGoToday(){
-  stockViewDate=new Date().toISOString().split('T')[0];
+  stockViewDate=_istToday();
   var dp=document.getElementById('stock-date-picker');
   if(dp)dp.value=stockViewDate;
   renderStockLedger();
@@ -2903,7 +3578,7 @@ function stockTab(tab,btn){
 }
 
 function renderStockDashboard(){
-  var today=new Date().toISOString().split('T')[0];
+  var today=_istToday();
   var dl=document.getElementById('stock-date-label');
   if(dl)dl.textContent=stockViewDate+(stockViewDate===today?' (Today)':'');
 
@@ -3057,7 +3732,7 @@ function renderStockEntries(){
 // ── Production Entry Form ─────────────────────────────────────
 function initProdStockForm(){
   editingProdId=null;
-  var today=new Date().toISOString().split('T')[0];
+  var today=_istToday();
   var dateSub=document.getElementById('prod-date-sub');
   var pageTitle=document.querySelector('#screen-add-production-stock .page-title');
   if(pageTitle)pageTitle.textContent='Add Production';
@@ -3089,6 +3764,9 @@ function editProdEntry(id){
   var curScreen=document.querySelector('.screen.active');
   editFromReport=curScreen&&curScreen.id==='screen-contractor-report';
   goTo('screen-add-production-stock');
+  // Push A: goTo() runs initProdStockForm(), which clears editingProdId — so every "edit"
+  // used to save a NEW entry and leave the original (a duplicate). Restore it here.
+  editingProdId=id;
   setTimeout(function(){
     var pageTitle=document.querySelector('#screen-add-production-stock .page-title');
     if(pageTitle)pageTitle.textContent='Edit Production Entry';
@@ -3178,14 +3856,15 @@ function saveProdStockEntry(){
   var items=prodStockSKUs.filter(function(s){return s.skuId&&parseFloat(s.qty)>0;});
   if(!items.length){alert('Please add at least one SKU with quantity.');return;}
 
-  var entryDate=new Date().toISOString().split('T')[0];
+  var all=loadProdEntries();
+  var origEntry=editingProdId?all.find(function(e){return e.id===editingProdId;}):null;
+  // Push A: Indian date (was UTC — entries made 00:00–05:30 got yesterday's date).
+  // An edit by a non-admin keeps the entry's own date instead of moving it to today.
+  var entryDate=origEntry?origEntry.date:_istToday();
   if(isAdmin()){
     var di=document.getElementById('prod-entry-date');
     if(di&&di.value)entryDate=di.value;
   }
-
-  var all=loadProdEntries();
-  var origEntry=editingProdId?all.find(function(e){return e.id===editingProdId;}):null;
   var oldId=editingProdId;
 
   // Always create fresh ID — avoids any Firebase update confusion
@@ -3210,14 +3889,10 @@ function saveProdStockEntry(){
   // Add old ID to a deleted blacklist so pullCloud never re-adds it
   if(oldId)addDeletedProd(oldId);
 
-  if(fbOK&&isOnline&&window._fb){
-    // Explicitly delete old document from Firestore
-    if(oldId&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(oldId);
-    // Save new document
-    if(window._fb.saveProdEntry)window._fb.saveProdEntry(entry);
-  } else {
-    addPQ('prod_entry',entry.id);
-  }
+  // Push A: queued first and retried until confirmed (a failed upload used to be forgotten).
+  // The replaced copy is deleted only AFTER the new one is safely in the cloud.
+  cloudSaveRecord('prod_entry',entry.id);
+  if(oldId)cloudDeleteRecord('prod_entry',oldId,entry.id);
 
   try{publishClosingStockSnapshot();}catch(e){}
   editingProdId=null;
@@ -3233,10 +3908,15 @@ function saveProdStockEntry(){
   },400);
 }
 
+// Push A: one delete path — remembered on this device, queued for the cloud, retried until confirmed
+function _deleteProdEntryNow(id){
+  addDeletedProd(id);
+  saveProdEntries(loadProdEntries().filter(function(e){return e.id!==id;}));
+  cloudDeleteRecord('prod_entry',id);
+}
 function deleteProdEntry(id){
   showModal('Delete Entry','Delete this production entry?',function(){
-    saveProdEntries(loadProdEntries().filter(function(e){return e.id!==id;}));
-    if(fbOK&&isOnline&&window._fb&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(id);
+    _deleteProdEntryNow(id);
     renderStockDashboard();
   });
 }
@@ -3343,6 +4023,8 @@ function confirmMergeSKUs(){
   var srcId=document.getElementById('merge-source').value;
   var tgtId=document.getElementById('merge-target').value;
   if(!srcId||!tgtId||srcId===tgtId)return;
+  // Push A: a merge on a device missing some records leaves those records pointing at a removed SKU
+  if(!_dataComplete()){alert('This device has not yet confirmed it holds every truck and production entry, so a merge could miss some records.\n\nWait for the green sync bar and try again.');return;}
   var skus=loadSKUsLocal();
   var src=skus.find(function(s){return s.id==srcId;});
   var tgt=skus.find(function(s){return s.id==tgtId;});
@@ -3357,7 +4039,7 @@ function doMergeSKUs(srcId,tgtId,src,tgt){
   var skus=loadSKUsLocal();
   var sessions=loadSessions();
   var prodEntries=loadProdEntries();
-  var sessionsChanged=0, prodChanged=0;
+  var sessionsChanged=0, prodChanged=0, _chgS=[], _chgP=[];
 
   // Update all loading sessions
   sessions.forEach(function(s){
@@ -3371,13 +4053,10 @@ function doMergeSKUs(srcId,tgtId,src,tgt){
     });
     if(changed){
       sessionsChanged++;
-      // Save updated session locally + to Firebase
-      var allSess=loadSessions();
-      var idx=allSess.findIndex(function(x){return x.id===s.id;});
-      if(idx>=0){allSess[idx]=s;saveSessions(allSess);}
-      if(fbOK&&isOnline&&window._fb)window._fb.saveSession(s).catch(function(){});
+      _chgS.push(s.id);   // Push A: uploaded by one SKU-remap job (below), not truck by truck
     }
   });
+  if(sessionsChanged>0)saveSessions(sessions);
 
   // Update all production entries
   prodEntries.forEach(function(e){
@@ -3387,10 +4066,13 @@ function doMergeSKUs(srcId,tgtId,src,tgt){
     });
     if(changed){
       prodChanged++;
-      if(fbOK&&isOnline&&window._fb)window._fb.saveProdEntry(e).catch(function(){});
+      _chgP.push(e.id);
     }
   });
   if(prodChanged>0)saveProdEntries(prodEntries);
+  // Push A: one compact job re-reads each record from the cloud, swaps the SKU and saves it back —
+  // so a truck finished on a phone meanwhile keeps its new rows (a blind re-upload used to undo them)
+  if(sessionsChanged||prodChanged){_queueSkuRemap(srcId,tgtId,_chgS,_chgP);syncQueue();}
 
   // Remove source SKU from master list
   var newSKUs=skus.filter(function(s){return s.id!=srcId;});
@@ -3500,17 +4182,15 @@ function crPeriodChange(){
 
 function crGetDateRange(){
   var period=document.getElementById('cr-period').value;
-  var today=new Date();
-  var to=today.toISOString().split('T')[0];
+  var to=_istToday();   // Push A: Indian date (was UTC)
   var from;
   if(period==='week'){
-    var day=today.getDay()||7;
-    var mon=new Date(today);mon.setDate(today.getDate()-day+1);
-    from=mon.toISOString().split('T')[0];
+    var t0=new Date(to+'T00:00:00Z'),day=t0.getUTCDay()||7;
+    from=new Date(t0.getTime()-(day-1)*86400000).toISOString().slice(0,10);
   } else if(period==='month'){
-    from=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-01';
+    from=to.slice(0,7)+'-01';
   } else if(period==='year'){
-    from=today.getFullYear()+'-01-01';
+    from=to.slice(0,4)+'-01-01';
   } else {
     from=document.getElementById('cr-from').value||to;
     to=document.getElementById('cr-to').value||to;
@@ -3535,7 +4215,7 @@ function wrGetDateRange(){
   var today=getISTDate();
   var d=new Date(today+'T00:00:00');
   var from=today,to=today;
-  if(p==='week'){var day=d.getDay();var diff=day===0?6:day-1;var s=new Date(d);s.setDate(d.getDate()-diff);from=s.toISOString().split('T')[0];}
+  if(p==='week'){var day=d.getDay();var diff=day===0?6:day-1;var s=new Date(d);s.setDate(d.getDate()-diff);from=_ymd(s);}
   else if(p==='month'){from=today.slice(0,7)+'-01';}
   else if(p==='year'){from=today.slice(0,4)+'-01-01';}
   else if(p==='custom'){
@@ -3812,8 +4492,7 @@ function buildCrDaywise(entries,skus){
 
 function deleteProdEntryFromReport(id){
   showModal('Delete Entry','Delete this production entry?',function(){
-    saveProdEntries(loadProdEntries().filter(function(e){return e.id!==id;}));
-    if(fbOK&&isOnline&&window._fb&&window._fb.deleteProdEntry)window._fb.deleteProdEntry(id);
+    _deleteProdEntryNow(id);
     // Re-generate the report to reflect the deletion
     renderContractorReport();
   });
@@ -4118,11 +4797,11 @@ function initKarigarLedger(){
     : '<option value="">No karigar team set up</option>';
   var n=new Date();
   if(!document.getElementById('kl-from').value)
-    document.getElementById('kl-from').value=new Date(n.getFullYear(),n.getMonth(),1).toISOString().split('T')[0];
+    document.getElementById('kl-from').value=_istToday().slice(0,7)+'-01';   // Push A: was the 31st of last month
   if(!document.getElementById('kl-to').value)
-    document.getElementById('kl-to').value=n.toISOString().split('T')[0];
+    document.getElementById('kl-to').value=_istToday();
   if(!document.getElementById('wip-date').value)
-    document.getElementById('wip-date').value=n.toISOString().split('T')[0];
+    document.getElementById('wip-date').value=_istToday();
   renderWipList();
   renderKarigarLedger();
 }
@@ -4400,7 +5079,7 @@ function renderLabourRates(){
     el.innerHTML='<div style="font-size:13px;color:var(--text-secondary);padding:8px 0;">No rates set. Add a default rate to start.</div>';
     return;
   }
-  var today=new Date().toISOString().split('T')[0];
+  var today=_istToday();
   el.innerHTML=rows.map(function(r){
     var sk=r.skuId?skus.find(function(s){return String(s.id)===String(r.skuId);}):null;
     var label=r.skuId?(sk?sk.name:'⚠ deleted SKU'):'All SKUs (default)';
@@ -4435,7 +5114,7 @@ function openAddRate(){
   var _dl=document.getElementById('rm-default-label');
   if(_dl) _dl.textContent=_kar?'Rate per kg of namkeen made':'Default rate — applies to any SKU without its own rate';
   document.getElementById('rate-modal-msg').textContent='Rates you change are saved as new dated rows. Earlier rates are kept, so past settlements still recalculate at what was actually paid.';
-  document.getElementById('rm-from').value=new Date().toISOString().split('T')[0];
+  document.getElementById('rm-from').value=_istToday();
   document.getElementById('rm-search').value='';
   document.getElementById('rm-msg').textContent='';
   buildRateGrid(cid);
@@ -4450,7 +5129,7 @@ function buildRateGrid(cid){
   // so the SKU grid is replaced by a single rate box.
   var _c=loadContractors().find(function(x){return x.id===cid;});
   if(_c && isKarigar(_c)){ buildKarigarRate(cid); return; }
-  var onDate=document.getElementById('rm-from').value||new Date().toISOString().split('T')[0];
+  var onDate=document.getElementById('rm-from').value||_istToday();
   var def=resolveLabourRate(cid,null,onDate);
   var dEl=document.getElementById('rm-default');
   dEl.value = def ? def.rate : '';
@@ -4487,7 +5166,7 @@ function onRateDateChange(){
 }
 
 function buildKarigarRate(cid){
-  var onDate=document.getElementById('rm-from').value||new Date().toISOString().split('T')[0];
+  var onDate=document.getElementById('rm-from').value||_istToday();
   var def=resolveLabourRate(cid,null,onDate);
   document.getElementById('rm-default').value = def ? def.rate : '';
   document.getElementById('rm-default-cur').textContent = def
@@ -4693,6 +5372,11 @@ async function renderBackupPanel(){
         '<div style="font-size:18px;font-weight:700;color:var(--blue);">'+c[1]+'</div>'+
         '<div style="font-size:10px;color:var(--text-secondary);text-transform:uppercase;font-weight:600;">'+c[0]+'</div></div>';
     }).join('');
+    // Push A: what THIS device holds, so a device that has fallen behind is obvious
+    var _ds=loadSessions().length,_dp=loadProdEntries().length;
+    el.innerHTML+='<div style="grid-column:1/-1;font-size:11px;color:var(--text-secondary);">On this device: '+_ds+' sessions · '+_dp+' production'+
+      ((_ds!==data.sessions.length||_dp!==data.prod_entries.length)?' <b style="color:var(--amber);">— differs from cloud</b>':' ✓')+
+      ' · <a href="#" onclick="openDataHealth();return false;">Data health</a></div>';
   }catch(e){
     el.innerHTML='<div style="grid-column:1/-1;font-size:12px;color:var(--red);">'+e.message+'</div>';
   }
@@ -4850,6 +5534,210 @@ async function doLoadingRestore(mode){
 // ═══════════════════════════════════════════════════════
 
 
+
+// ═══════════════════════════════════════════════════════
+// DATA HEALTH (Push A) — tap any sync bar to open
+// Shows what is on this device, what is still uploading, anything found only on
+// this device, possible duplicate production entries, and recent sync notes.
+// ═══════════════════════════════════════════════════════
+function _dhEsc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function _dhSection(title,body){return '<div style="margin:12px 0 4px;font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">'+title+'</div>'+body;}
+function _dhRow(label,val,col){return '<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:0.5px solid var(--border);"><span style="color:var(--text-secondary);">'+label+'</span><span style="text-align:right;'+(col?'color:'+col+';font-weight:600;':'')+'">'+val+'</span></div>';}
+function _dhItemsText(items){
+  var skus=loadSKUsLocal(),m={};skus.forEach(function(s){m[s.id]=s;});
+  return (items||[]).map(function(it){var s=m[it.skuId];return _dhEsc(s?s.name:'⚠ unknown SKU')+': '+_dhEsc(it.qty);}).join(' · ');
+}
+function _dhLabel(item){
+  var t=item.type,id=item.id;
+  try{
+    if(t==='session'){var s=getSess(id);return 'Truck '+(s?_dhEsc(s.truck)+' · '+_dhEsc(s.date)+(s.done?' (finished)':' (loading)'):_dhEsc(id));}
+    if(t==='prod_entry'){var e=loadProdEntries().find(function(x){return x.id===id;});return 'Production '+(e?_dhEsc(e.date)+' · '+_dhEsc(e.contractor):_dhEsc(id));}
+    if(t==='freight_entry')return 'Freight trip '+_dhEsc(id);
+    if(t==='freight_payment')return 'Freight payment '+_dhEsc(id);
+    if(/_delete$/.test(t))return 'Delete '+_dhEsc(t.replace(/_delete$/,'').replace('_',' '))+' '+_dhEsc(id);
+    if(t==='sku_remap'){var q=_obFind(t,id),d=q&&q.data;return 'SKU merge'+(d?' — '+d.sess.length+' truck(s) and '+d.prod.length+' production entr(ies) left to update':'');}
+  }catch(x){}
+  return _dhEsc(t.replace(/_/g,' '))+' settings'+(item.held?' <b style="color:var(--red);">— held back</b>':'');
+}
+// Records on this device that the cloud has never had (left behind by the old upload bugs)
+function _dhLocalOnly(){
+  var out={sess:[],prod:[],known:true};
+  if(!_cloudSessIds&&!_cloudProdIds){out.known=false;return out;}
+  var seenS=LS('tl_seen_sess')||{},seenP=LS('ms_seen_prod')||{};
+  var pendS=_pendingIds('session'),pendP=_pendingIds('prod_entry');
+  var cutoff=new Date(Date.now()-60*86400000).toISOString().slice(0,10);
+  var wide=isAdmin()||isAccounts();
+  if(_cloudSessIds)loadSessions().forEach(function(s){
+    if(!s||!s.id||_cloudSessIds[s.id]||pendS[s.id]||seenS[s.id])return;
+    if(!_isOwn(s)||(s.date||'')<cutoff)return;
+    out.sess.push(s);
+  });
+  if(_cloudProdIds)loadProdEntries().forEach(function(e){
+    if(!e||!e.id||_cloudProdIds[e.id]||pendP[e.id]||seenP[e.id])return;
+    if(!wide&&!(CU&&e.createdBy===CU.username))return;
+    if((e.date||'')<cutoff)return;
+    out.prod.push(e);
+  });
+  return out;
+}
+// Same date + contractor + shift entered more than once — most are edits that saved a copy (bug fixed in Push A)
+function _dupGroups(){
+  var g={};
+  loadProdEntries().forEach(function(e){
+    if(!e||!e.date)return;
+    var k=e.date+'|'+(e.contractorId||e.contractor||'')+'|'+(e.shift||'');
+    (g[k]=g[k]||[]).push(e);
+  });
+  return Object.keys(g).filter(function(k){return g[k].length>1;}).sort().reverse().map(function(k){
+    return g[k].sort(function(a,b){return (a.createdAt||'').localeCompare(b.createdAt||'');});
+  });
+}
+function _orphanSkuRefs(){
+  var ids={};loadSKUsLocal().forEach(function(s){ids[s.id]=1;});
+  var s=0,p=0;
+  loadSessions().forEach(function(x){if(x.done&&(x.rowData||[]).some(function(r){return (r.entries||[]).some(function(e){return e.skuId&&!ids[e.skuId];});}))s++;});
+  loadProdEntries().forEach(function(x){if((x.items||[]).some(function(it){return it.skuId&&!ids[it.skuId];}))p++;});
+  return {sessions:s,prod:p};
+}
+function openDataHealth(){
+  var ov=document.getElementById('dh-modal');
+  if(!ov){
+    ov=document.createElement('div');ov.id='dh-modal';ov.className='modal-overlay';
+    ov.innerHTML='<div class="modal-box" style="max-width:600px;max-height:90vh;overflow-y:auto;">'+
+      '<div class="modal-title">🩺 Data health</div><div id="dh-body" style="font-size:13px;"></div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;"><button class="btn btn-primary" style="flex:1;margin:0;" onclick="dhRetry()">🔄 Upload now</button>'+
+      '<button class="btn btn-secondary" style="flex:1;margin:0;" onclick="closeDataHealth()">Close</button></div></div>';
+    document.body.appendChild(ov);
+  }
+  renderDataHealth();ov.classList.add('open');
+}
+function closeDataHealth(){var ov=document.getElementById('dh-modal');if(ov)ov.classList.remove('open');}
+function renderDataHealth(){
+  var el=document.getElementById('dh-body');if(!el)return;
+  var st=_syncState(),h='';
+  h+='<div class="sync-bar '+st.cls+'">'+st.msg.replace(' Tap for details','')+'</div>';
+  // This device
+  var sess=loadSessions(),prod=loadProdEntries(),used=0,lsUsed=0;
+  Object.keys(_MEM).forEach(function(k){used+=_MEM[k].length;});
+  try{for(var li=0;li<localStorage.length;li++){var lk=localStorage.key(li);lsUsed+=lk.length+(localStorage.getItem(lk)||'').length;}}catch(e){}
+  var eng=_storeEngine==='indexeddb'?'IndexedDB (large) ✓':(_storeEngine==='localStorage'?'localStorage — 5 MB limit ⚠️':'starting…');
+  var d=_dhRow('App version',_dhEsc(APP_BUILD))+
+    _dhRow('Storage',eng,_storeEngine==='indexeddb'?'':'var(--red)')+
+    _dhRow('Data on this device',(used/1e6).toFixed(2)+' MB large lists · '+(lsUsed/1e6).toFixed(2)+' MB settings (limit ~5 MB)',lsUsed>4.5e6?'var(--red)':'')+
+    _dhRow('Trucks on this device',sess.length+' ('+sess.filter(function(s){return s.done;}).length+' finished)')+
+    _dhRow('Production entries on this device',prod.length);
+  var se=_storeErrAny();if(se)d+=_dhRow('Storage problem',_dhEsc(se),'var(--red)');
+  h+=_dhSection('This device',d);
+  // Live sync
+  if(isAdmin()||isAccounts()){
+    var lv=function(x,n){return x.ok?'✅ live'+(n!=null?' — '+n+' in cloud':'')+' · '+_fmtTime(x.at):(x.err?'❌ stopped ('+_dhEsc(x.err)+')':'⏳ waiting for cloud…');};
+    h+=_dhSection('Live sync with cloud',_dhRow('Trucks',lv(__sessLive,_cloudSessIds?Object.keys(_cloudSessIds).length:null),__sessLive.ok?'var(--green)':'var(--red)')+
+      _dhRow('Production entries',lv(__prodLive,_cloudProdIds?Object.keys(_cloudProdIds).length:null),__prodLive.ok?'var(--green)':'var(--red)')+
+      _dhRow('Closing stock to Orders app',_dataComplete()?'✅ allowed':'⛔ held back until data is confirmed',_dataComplete()?'var(--green)':'var(--amber)'));
+  }
+  // Waiting to upload
+  var q=getPQ();
+  var qb=q.length?q.slice(0,25).map(function(it){
+    return '<div style="padding:4px 0;border-bottom:0.5px solid var(--border);">'+_dhLabel(it)+(it.at?' <span style="color:var(--text-secondary);font-size:11px;">· queued '+_fmtTime(it.at)+'</span>':'')+'</div>';
+  }).join('')+(q.length>25?'<div style="color:var(--text-secondary);">…and '+(q.length-25)+' more</div>':''):'<div style="color:var(--green);">Nothing waiting ✓</div>';
+  if(_lastUploadErr)qb+='<div style="color:var(--red);margin-top:6px;">Last upload problem: '+_dhEsc(_lastUploadErr.code)+' at '+_fmtTime(_lastUploadErr.at)+'</div>';
+  if(_lastUploadOk)qb+='<div style="color:var(--text-secondary);margin-top:2px;">Last successful upload: '+_fmtTime(_lastUploadOk)+'</div>';
+  h+=_dhSection('Waiting to upload ('+q.length+')',qb);
+  var heldItems=_obAll().filter(function(x){return x.held;});
+  if(heldItems.length){
+    var hb='<div style="color:var(--text-secondary);font-size:12px;margin-bottom:4px;">These changes would remove most of the records in the cloud copy, so they were not sent. If you really removed them, upload anyway; if not, discard the change and this device reloads the cloud copy.</div>';
+    heldItems.forEach(function(x){var c=_cloudCounts()[x.type];
+      hb+='<div style="padding:6px 0;border-bottom:0.5px solid var(--border);"><b>'+_dhEsc(x.type.replace(/_/g,' '))+'</b>: cloud has '+(c==null?'?':c)+' records, this change leaves '+_docCount(x.data)+
+        '<div style="margin-top:4px;"><button class="btn btn-sm btn-danger" onclick="dhForce(\''+_dhEsc(x.type)+'\')">Upload anyway</button> <button class="btn btn-sm btn-secondary" onclick="dhDiscard(\''+_dhEsc(x.type)+'\')">Discard this change</button></div></div>';});
+    h+=_dhSection('Held back for your review ('+heldItems.length+')',hb);
+  }
+  // Only on this device
+  var lo=_dhLocalOnly(),lb='';
+  if(!lo.known)lb='<div style="color:var(--text-secondary);">Checking against the cloud… (needs a connection)</div>';
+  else if(!lo.sess.length&&!lo.prod.length)lb='<div style="color:var(--green);">None ✓</div>';
+  else{
+    lb='<div style="color:var(--text-secondary);font-size:12px;margin-bottom:4px;">Found on this device but never reached the cloud (last 60 days). Upload the real ones; remove leftovers.</div>';
+    lo.sess.forEach(function(s){lb+='<div style="padding:5px 0;border-bottom:0.5px solid var(--border);">🚛 '+_dhEsc(s.truck)+' · '+_dhEsc(s.date)+' · '+_filledCount(s)+' entries'+(s.done?' (finished)':' (loading)')+
+      '<div style="margin-top:4px;"><button class="btn btn-sm btn-primary" onclick="dhUpload(\'session\',\''+_dhEsc(s.id)+'\')">Upload</button> <button class="btn btn-sm btn-secondary" onclick="dhRemove(\'session\',\''+_dhEsc(s.id)+'\')">Remove from this device</button></div></div>';});
+    lo.prod.forEach(function(e){var mine=!!(CU&&e.createdBy===CU.username);
+      lb+='<div style="padding:5px 0;border-bottom:0.5px solid var(--border);">🏭 '+_dhEsc(e.date)+' · '+_dhEsc(e.contractor)+' · '+_dhItemsText(e.items)+
+      ' <span style="color:var(--text-secondary);font-size:11px;">· entered by '+_dhEsc(e.createdBy||'?')+'</span>'+
+      (mine?'':'<div style="font-size:11px;color:var(--text-secondary);">Entered by someone else — most likely a copy that was changed or deleted on another device.</div>')+
+      '<div style="margin-top:4px;">'+(mine?'<button class="btn btn-sm btn-primary" onclick="dhUpload(\'prod_entry\',\''+_dhEsc(e.id)+'\')">Upload</button> ':'')+
+      '<button class="btn btn-sm btn-secondary" onclick="dhRemove(\'prod_entry\',\''+_dhEsc(e.id)+'\')">Remove from this device</button></div></div>';});
+  }
+  h+=_dhSection('Only on this device',lb);
+  // Admin/accounts checks
+  if(isAdmin()||isAccounts()){
+    var groups=_dupGroups(),db='';
+    if(!groups.length)db='<div style="color:var(--green);">None ✓</div>';
+    else{
+      db='<div style="color:var(--text-secondary);font-size:12px;margin-bottom:4px;">Same date, contractor and shift entered more than once. Before this update, editing an entry saved a second copy instead of changing it — the later one is usually the corrected version. Check each group and delete the wrong copy.</div>';
+      groups.slice(0,40).forEach(function(gr){
+        var f=gr[0];
+        db+='<div style="background:var(--amber-light);border-radius:8px;padding:8px;margin-bottom:6px;"><div style="font-weight:600;">'+_dhEsc(f.date)+' · '+_dhEsc(f.contractor)+' · '+(f.shift==='night'?'🌙 Night':'☀️ Day')+'</div>'+
+          gr.map(function(e){return '<div style="padding:4px 0;border-top:0.5px solid var(--border);margin-top:4px;font-size:12px;">'+_dhItemsText(e.items)+
+            '<div style="color:var(--text-secondary);font-size:11px;">saved '+_dhEsc((e.createdAt||'').slice(0,16).replace('T',' '))+' UTC by '+_dhEsc(e.createdBy||'?')+(e.updatedAt&&e.updatedAt!==e.createdAt?' · edited '+_dhEsc(e.updatedAt.slice(0,16).replace('T',' ')):'')+'</div>'+
+            (isAdmin()?'<button class="btn btn-sm btn-danger" style="margin-top:3px;" onclick="dhDeleteProd(\''+_dhEsc(e.id)+'\')">Delete this copy</button>':'')+'</div>';}).join('')+'</div>';
+      });
+      if(groups.length>40)db+='<div style="color:var(--text-secondary);">…and '+(groups.length-40)+' more groups</div>';
+    }
+    h+=_dhSection('Possible duplicate production entries ('+groups.length+')',db);
+    var orf=_orphanSkuRefs();
+    h+=_dhSection('Entries pointing to a removed SKU',(orf.sessions||orf.prod)?
+      '<div style="color:var(--red);">'+orf.sessions+' finished truck(s) and '+orf.prod+' production entr(ies) use an SKU that is no longer in the master list — those quantities are missing from every report.</div>':
+      '<div style="color:var(--green);">None ✓</div>');
+  }
+  // Notes
+  h+=_dhSection('Recent sync notes',_syncLog.length?_syncLog.slice(0,8).map(function(n){return '<div style="padding:3px 0;font-size:12px;"><span style="color:var(--text-secondary);">'+_fmtTime(n.at)+'</span> '+_dhEsc(n.msg)+'</div>';}).join(''):'<div style="color:var(--text-secondary);">None</div>');
+  el.innerHTML=h;
+}
+function dhRetry(){syncQueue().then(function(){renderDataHealth();});setTimeout(renderDataHealth,300);}
+function dhUpload(type,id){addPQ(type,id);_logSync('Manually queued '+type+' '+id+' for upload');syncQueue().then(renderDataHealth);renderDataHealth();}
+function dhRemove(type,id){
+  if(!confirm('Remove this record from THIS device only? It is not in the cloud, so it will be gone for good.'))return;
+  if(type==='session'){addDeleted(id);saveSessions(loadSessions().filter(function(s){return s.id!==id;}));}
+  else if(type==='prod_entry'){addDeletedProd(id);saveProdEntries(loadProdEntries().filter(function(e){return e.id!==id;}));}
+  _logSync('Removed '+type+' '+id+' from this device');
+  renderDataHealth();
+}
+function dhForce(type){
+  if(!isAdmin()){alert('Only admin can approve this.');return;}
+  var it=_obFind(type,type);if(!it)return;
+  if(!confirm('Upload this '+type.replace(/_/g,' ')+' list anyway?\n\nThe cloud copy will be replaced by this device\'s copy ('+_docCount(it.data)+' records).'))return;
+  it.force=true;delete it.held;_obSave();_logSync('Admin approved the held-back '+type+' upload');
+  syncQueue().then(renderDataHealth);renderDataHealth();
+}
+function dhDiscard(type){
+  if(!confirm('Discard this change and reload the cloud copy onto this device?'))return;
+  delPQ(type,type);_logSync('Discarded the held-back '+type+' change');
+  pullCloud().then(renderDataHealth);renderDataHealth();
+}
+function dhDeleteProd(id){
+  if(!isAdmin())return;
+  var e=loadProdEntries().find(function(x){return x.id===id;});if(!e)return;
+  if(!confirm('Delete this production entry?\n\n'+e.date+' · '+e.contractor+'\n'+_dhItemsText(e.items).replace(/&amp;/g,'&')))return;
+  _deleteProdEntryNow(id);
+  _logSync('Deleted duplicate production entry '+id);
+  renderDataHealth();
+}
+
+// Reports: say so on the page when the figures are not confirmed complete
+(function(){
+  function wrapReport(name,elId,needs){
+    var orig=window[name];if(typeof orig!=='function')return;
+    window[name]=function(){
+      var r=orig.apply(this,arguments);
+      try{var el=document.getElementById(elId),b=_freshBanner(needs);if(el&&b)el.insertAdjacentHTML('afterbegin',b);}catch(e){}
+      return r;
+    };
+  }
+  wrapReport('renderContractorReport','cr-report-output',['prod']);
+  wrapReport('renderKarigarLedger','kl-output',['prod']);
+  wrapReport('renderWeightReport','wr-output',['sess','prod']);
+  wrapReport('renderStockLedger','stock-ledger',['sess','prod']);
+})();
+
 // Boot
 function boot(){
   // date set by initNewSession() via goTo
@@ -4912,7 +5800,7 @@ function initNewSession(){
   // Silently refresh destinations from Firebase in background
   // so any destinations added by admin after login appear immediately
   if(fbOK&&isOnline&&window._fb&&window._fb.loadDestinations){
-    window._fb.loadDestinations().then(function(d){if(d)SS(K.DESTINATIONS,d);}).catch(function(){});
+    window._fb.loadDestinations().then(function(d){_takeCloudDoc(K.DESTINATIONS,d);}).catch(function(){});
   }
 }
 
@@ -4979,9 +5867,9 @@ function initFreightScreen(){
       window._fb.loadFreightPayments&&window._fb.loadFreightPayments(),
       window._fb.loadDestinations&&window._fb.loadDestinations()
     ]).then(function(results){
-      if(results[0]) SS(K.FREIGHT_ENTRIES,results[0]);
-      if(results[1]) SS(K.FREIGHT_PAYMENTS,results[1]);
-      if(results[2]) SS(K.DESTINATIONS,results[2]);
+      if(results[0]) _mergeRecordsFromCloud(K.FREIGHT_ENTRIES,'freight_entry',results[0]);
+      if(results[1]) _mergeRecordsFromCloud(K.FREIGHT_PAYMENTS,'freight_payment',results[1]);
+      if(results[2]) _takeCloudDoc(K.DESTINATIONS,results[2]);
       // Re-render whichever view is active with fresh data
       if(freightTab==='add'){
         var pd=document.getElementById('ft-pending-date');
@@ -5068,9 +5956,7 @@ function addFreightEntry(){
   var entries=loadFreightEntries().filter(function(e){return e.id!==entry.id;});
   entries.push(entry);
   saveFreightEntriesLocal(entries);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
-    window._fb.saveFreightEntry(entry).then(function(ok){if(!ok)addPQ('freight_entry',entry.id);}).catch(function(){addPQ('freight_entry',entry.id);});
-  } else { addPQ('freight_entry',entry.id); }
+  cloudSaveRecord('freight_entry',entry.id);
 
   // Clear form
   document.getElementById('ft-truck').value='';
@@ -5131,9 +6017,7 @@ function saveFreightEdit(){
   e.receiptReceived=document.getElementById('fem-receipt').checked;
   e.notes=document.getElementById('fem-notes').value.trim();
   saveFreightEntriesLocal(entries);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
-    window._fb.saveFreightEntry(e).then(function(ok){if(!ok)addPQ('freight_entry',e.id);}).catch(function(){addPQ('freight_entry',e.id);});
-  } else { addPQ('freight_entry',e.id); }
+  cloudSaveRecord('freight_entry',e.id);
   closeFreightEditModal();
   _renderTruckLedger();
 }
@@ -5146,9 +6030,7 @@ function deleteFreightEntryById(id){
   showModal('Delete entry','Permanently delete this freight trip entry?',function(){
     var entries=loadFreightEntries().filter(function(e){return e.id!==id;});
     saveFreightEntriesLocal(entries);
-    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightEntry){
-      window._fb.deleteFreightEntry(id).then(function(ok){if(!ok)addPQ('freight_entry_delete',id);}).catch(function(){addPQ('freight_entry_delete',id);});
-    } else { addPQ('freight_entry_delete',id); }
+    cloudDeleteRecord('freight_entry',id);
     _renderTruckLedger();
   });
 }
@@ -5157,9 +6039,7 @@ function deleteFreightPaymentById(id){
   showModal('Delete payment','Permanently delete this payment record?',function(){
     var payments=loadFreightPayments().filter(function(p){return p.id!==id;});
     saveFreightPaymentsLocal(payments);
-    if(fbOK&&isOnline&&window._fb&&window._fb.deleteFreightPayment){
-      window._fb.deleteFreightPayment(id).then(function(ok){if(!ok)addPQ('freight_payment_delete',id);}).catch(function(){addPQ('freight_payment_delete',id);});
-    } else { addPQ('freight_payment_delete',id); }
+    cloudDeleteRecord('freight_payment',id);
     _renderTruckLedger();
   });
 }
@@ -5181,9 +6061,7 @@ function saveFreightPaymentInline(){
   var payments=loadFreightPayments();
   payments.push(payment);
   saveFreightPaymentsLocal(payments);
-  if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightPayment){
-    window._fb.saveFreightPayment(payment).then(function(ok){if(!ok)addPQ('freight_payment',payment.id);}).catch(function(){addPQ('freight_payment',payment.id);});
-  } else { addPQ('freight_payment',payment.id); }
+  cloudSaveRecord('freight_payment',payment.id);
   _renderTruckLedger(); // refresh results
 }
 
@@ -5207,13 +6085,13 @@ function fetchFreshFreight(cb){
       window._fb.loadFreightPayments?window._fb.loadFreightPayments():Promise.resolve(null)
     ]).then(function(res){
       if(res[0]){
-        SS(K.FREIGHT_ENTRIES,res[0]);
+        _mergeRecordsFromCloud(K.FREIGHT_ENTRIES,'freight_entry',res[0]);
       } else {
         // Firebase read failed — show visible warning in sync bar
         setSyncBar('error','⚠️ Freight data read failed — check Firestore rules in Firebase Console');
         console.error('fetchFreshFreight: loadFreightEntries returned null — possible Firestore rules issue');
       }
-      if(res[1]) SS(K.FREIGHT_PAYMENTS,res[1]);
+      if(res[1]) _mergeRecordsFromCloud(K.FREIGHT_PAYMENTS,'freight_payment',res[1]);
       cb();
     }).catch(function(err){
       console.error('fetchFreshFreight error:',err);
@@ -5667,9 +6545,7 @@ function toggleReceiptStatus(id){
     showModal('Revert Receipt','Mark this entry as receipt pending?',function(){
       e.receiptReceived=false;e.receiptDate='';
       saveFreightEntriesLocal(entries);
-      if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
-        window._fb.saveFreightEntry(e).then(function(ok){if(!ok)addPQ('freight_entry',e.id);}).catch(function(){addPQ('freight_entry',e.id);});
-      } else { addPQ('freight_entry',e.id); }
+      cloudSaveRecord('freight_entry',e.id);
       _renderTruckLedger();
     });
   } else {
@@ -5679,9 +6555,7 @@ function toggleReceiptStatus(id){
     d=d.trim()||getISTDate();
     e.receiptReceived=true;e.receiptDate=d;
     saveFreightEntriesLocal(entries);
-    if(fbOK&&isOnline&&window._fb&&window._fb.saveFreightEntry){
-      window._fb.saveFreightEntry(e).then(function(ok){if(!ok)addPQ('freight_entry',e.id);}).catch(function(){addPQ('freight_entry',e.id);});
-    } else { addPQ('freight_entry',e.id); }
+    cloudSaveRecord('freight_entry',e.id);
     _renderTruckLedger();
   }
 }
